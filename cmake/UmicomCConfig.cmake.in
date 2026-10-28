@@ -1,0 +1,17 @@
+#-----------------------------------------------------------------------------
+# Umicom C
+# File: cmake/UmicomCConfig.cmake.in
+#
+# PURPOSE:
+#   Load exported compiler and runtime targets without rebuilding the project.
+#
+# AUTHOR AND ORGANISATION:
+# Sammy Hegab
+# Umicom Foundation
+#
+# LICENCE:
+# MIT
+#---------------------------------------------------------------------------
+@PACKAGE_INIT@
+include("${CMAKE_CURRENT_LIST_DIR}/UmicomCTargets.cmake")
+check_required_components(UmicomC)

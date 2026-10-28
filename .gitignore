@@ -5,3 +5,11 @@
 /batch*/
 /.env
 /.env.*
+
+# Keep generated diagnostics and internal working material local.
+*.log
+/[Uu][Pp][Dd][Aa][Tt][Ee]_*
+/[Bb][Aa][Tt][Cc][Hh]_*
+/ROADMAP_MAJOR_UPDATES.md
+/UMICOM_EDUCATION_NATIVE_BATCH.md
+/SITE_MIGRATION.md
