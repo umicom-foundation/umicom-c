@@ -9,3 +9,7 @@ The first implementation accepts one integer-returning function, compiles it to 
 Start with [your first program](docs/first-program.md), then read the [language](docs/language.md), [bytecode](docs/bytecode.md) and [embedding](docs/embedding.md) guides. The independent Kernel program and optional Framework adapter reuse this runtime.
 
 Regression sources cover compilation, wire decoding, arithmetic, output preservation and operation comparison. Build and test results must be qualified for the selected host or target; source presence alone is not a runtime pass.
+
+The [build and execution guide](docs/execution-guide.md) walks through a first
+program, readable bytecode and the optional `--max-steps` execution budget.
+It includes Windows commands, expected results and a controlled failure to inspect.

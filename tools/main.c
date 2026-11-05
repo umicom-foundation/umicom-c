@@ -61,13 +61,32 @@ static int usage(void)
 {
     fputs("Usage:\n"
           "  umicom-c check source.uc\n"
-          "  umicom-c run source.uc\n"
+          "  umicom-c run source.uc [--max-steps N]\n"
           "  umicom-c compile source.uc new-output.umcb\n"
-          "  umicom-c exec program.umcb\n"
+          "  umicom-c exec program.umcb [--max-steps N]\n"
           "  umicom-c disassemble program.umcb\n"
           "  umicom-c --version\n"
           "Profile: int main(void) { return <int32 arithmetic>; }\n", stderr);
     return 2;
+}
+
+/* Keep execution policy in the caller: the runtime already accounts for each
+ * instruction. Parse a bounded decimal value without locale, sign or overflow
+ * so a typo cannot silently expand the requested execution allowance. */
+static int step_limit(const char *text, size_t *limit)
+{
+    size_t value = 0U;
+    if (text == NULL || text[0] == '\0') return 0;
+    for (size_t i = 0U; text[i] != '\0'; ++i) {
+        if (text[i] < '0' || text[i] > '9') return 0;
+        const size_t digit = (size_t)(text[i] - '0');
+        if (value > (UMC_PROGRAM_LIMIT - digit) / 10U) return 0;
+        value = value * 10U + digit;
+        if (i >= 9U) return 0;
+    }
+    if (value == 0U) return 0;
+    *limit = value;
+    return 1;
 }
 
 int main(int argc, char **argv)
@@ -82,8 +101,21 @@ int main(int argc, char **argv)
     const int compile = strcmp(argv[1], "compile") == 0;
     const int execute = strcmp(argv[1], "exec") == 0;
     const int disassemble = strcmp(argv[1], "disassemble") == 0;
+    /* The original fixed-arity rule is retained for review. The replacement
+     * keeps all earlier commands and admits an execution-only budget option. */
+#if 0
     if ((!check && !run && !compile && !execute && !disassemble) ||
         argc != (compile ? 4 : 3)) return usage();
+#endif
+    size_t fuel = UMC_PROGRAM_LIMIT;
+    if (!check && !run && !compile && !execute && !disassemble) return usage();
+    if ((run || execute) && argc == 5) {
+        if (strcmp(argv[3], "--max-steps") != 0 || !step_limit(argv[4], &fuel)) {
+            fprintf(stderr, "--max-steps requires a decimal integer from 1 to %u.\n",
+                (unsigned)UMC_PROGRAM_LIMIT);
+            return 2;
+        }
+    } else if (argc != (compile ? 4 : 3)) return usage();
 
     /* The command owns these arrays for its lifetime. Core libraries never
      * allocate, retain them or perform file operations on the caller's behalf. */
@@ -117,7 +149,12 @@ int main(int argc, char **argv)
         }
     } else if (status == UMC_OK) {
         UmcResult result;
+        /* Preserve the former default call; explicit fuel now reaches the same
+         * runtime, including its unchanged-result guarantee on exhaustion. */
+#if 0
         status = umc_execute(instructions, count, UMC_PROGRAM_LIMIT, &result, &diagnostic);
+#endif
+        status = umc_execute(instructions, count, fuel, &result, &diagnostic);
         if (status == UMC_OK) {
             printf("Result: %" PRId32 "\nInstructions: %zu\n", result.value, result.instructions_executed);
         }

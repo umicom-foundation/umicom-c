@@ -28,6 +28,11 @@ if(TARGET umicom-c)
         "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/cli-artifacts"
         -P "${CMAKE_CURRENT_LIST_DIR}/check_cli.cmake")
     set_tests_properties(umicom.c.cli PROPERTIES LABELS "umicom-c;cli" TIMEOUT 30)
+    add_test(NAME umicom.c.cli-budget
+        COMMAND "${CMAKE_COMMAND}" "-DTOOL=$<TARGET_FILE:umicom-c>"
+        "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/budget-artifacts"
+        -P "${CMAKE_CURRENT_LIST_DIR}/check_cli_budget.cmake")
+    set_tests_properties(umicom.c.cli-budget PROPERTIES LABELS "umicom-c;cli" TIMEOUT 30)
 endif()
 
 # Instruction identity remains independent of comment and whitespace locations.
