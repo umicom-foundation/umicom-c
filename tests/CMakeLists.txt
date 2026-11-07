@@ -56,3 +56,19 @@ foreach(target IN ITEMS umicom-c-test-comparison umicom-c-test-roundtrip-corpus 
         target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
     endif()
 endforeach()
+
+# Inspection and execution share validation but have different success claims.
+add_executable(umicom-c-test-inspection test_inspection.c)
+target_link_libraries(umicom-c-test-inspection PRIVATE UmicomC::Runtime)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-inspection PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+endif()
+add_test(NAME umicom.c.inspection COMMAND umicom-c-test-inspection)
+set_tests_properties(umicom.c.inspection PROPERTIES LABELS "umicom-c;unit;inspection" TIMEOUT 10)
+if(TARGET umicom-c)
+    add_test(NAME umicom.c.cli-inspection
+        COMMAND "${CMAKE_COMMAND}" "-DTOOL=$<TARGET_FILE:umicom-c>"
+        "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/inspection-artifacts"
+        -P "${CMAKE_CURRENT_LIST_DIR}/check_cli_inspection.cmake")
+    set_tests_properties(umicom.c.cli-inspection PROPERTIES LABELS "umicom-c;cli;inspection" TIMEOUT 30)
+endif()

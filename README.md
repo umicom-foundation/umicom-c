@@ -13,3 +13,7 @@ Regression sources cover compilation, wire decoding, arithmetic, output preserva
 The [build and execution guide](docs/execution-guide.md) walks through a first
 program, readable bytecode and the optional `--max-steps` execution budget.
 It includes Windows commands, expected results and a controlled failure to inspect.
+
+## Program inspection
+
+Use `umicom-c inspect source.uc` or `umicom-c inspect-bytecode program.umcb` to examine instruction counts, stack requirements and portable bytecode size before execution. See [Inspect a program before execution](docs/program-inspection.md) for setup, API ownership, examples and limitations.

@@ -95,6 +95,24 @@ UmcStatus umc_compile(const char *source, size_t length,
 UmcStatus umc_validate(const UmcInstruction *program, size_t count,
     UmcDiagnostic *diagnostic);
 
+/* Structural facts for the current straight-line bytecode profile. These are
+ * counts, not host memory sizes or a guarantee that arithmetic will succeed. */
+typedef struct UmcProgramInfo {
+    size_t instruction_count;
+    size_t peak_stack;
+    size_t constant_count;
+    size_t arithmetic_count;
+    size_t bytecode_size;
+} UmcProgramInfo;
+
+/* Inspect without executing. The same complete validation used by execution
+ * supplies these facts. Output is unchanged on failure; it must be disjoint
+ * from the program and optional diagnostic. Program memory is borrowed and
+ * must remain immutable throughout the call. Successful execution of this
+ * branch-free profile needs instruction_count fuel, including RETURN. */
+UmcStatus umc_inspect(const UmcInstruction *program, size_t count,
+    UmcProgramInfo *info, UmcDiagnostic *diagnostic);
+
 /* Fuel counts executed instructions including RETURN. Validation work is
  * separately bounded by UMC_PROGRAM_LIMIT. Result is unchanged on failure.
  * Caller-owned program memory must remain immutable for the duration of the call. */

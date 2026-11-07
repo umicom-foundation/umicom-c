@@ -61,6 +61,8 @@ static int usage(void)
 {
     fputs("Usage:\n"
           "  umicom-c check source.uc\n"
+          "  umicom-c inspect source.uc\n"
+          "  umicom-c inspect-bytecode program.umcb\n"
           "  umicom-c run source.uc [--max-steps N]\n"
           "  umicom-c compile source.uc new-output.umcb\n"
           "  umicom-c exec program.umcb [--max-steps N]\n"
@@ -101,6 +103,8 @@ int main(int argc, char **argv)
     const int compile = strcmp(argv[1], "compile") == 0;
     const int execute = strcmp(argv[1], "exec") == 0;
     const int disassemble = strcmp(argv[1], "disassemble") == 0;
+    const int inspect_source = strcmp(argv[1], "inspect") == 0;
+    const int inspect_bytes = strcmp(argv[1], "inspect-bytecode") == 0;
     /* The original fixed-arity rule is retained for review. The replacement
      * keeps all earlier commands and admits an execution-only budget option. */
 #if 0
@@ -108,7 +112,13 @@ int main(int argc, char **argv)
         argc != (compile ? 4 : 3)) return usage();
 #endif
     size_t fuel = UMC_PROGRAM_LIMIT;
+    /* Keep the previous command gate for review; inspection is an additive
+     * read-only command and shares the compiler/runtime validation path. */
+#if 0
     if (!check && !run && !compile && !execute && !disassemble) return usage();
+#endif
+    if (!check && !run && !compile && !execute && !disassemble &&
+        !inspect_source && !inspect_bytes) return usage();
     if ((run || execute) && argc == 5) {
         if (strcmp(argv[3], "--max-steps") != 0 || !step_limit(argv[4], &fuel)) {
             fprintf(stderr, "--max-steps requires a decimal integer from 1 to %u.\n",
@@ -124,14 +134,29 @@ int main(int argc, char **argv)
     UmcDiagnostic diagnostic;
     size_t length = 0U;
     size_t count = 0U;
+    /* Binary inspection uses the decoder, including all wire-format checks.
+     * Retain the earlier selector to make the extension explicit. */
+#if 0
     const int binary = execute || disassemble;
+#endif
+    const int binary = execute || disassemble || inspect_bytes;
     if (!read_file(argv[2], input, binary ? UMC_BYTECODE_LIMIT : UMC_SOURCE_LIMIT, &length)) {
         return 2;
     }
     UmcStatus status = binary ?
         umc_decode(input, length, instructions, UMC_PROGRAM_LIMIT, &count, &diagnostic) :
         umc_compile((const char *)input, length, instructions, UMC_PROGRAM_LIMIT, &count, &diagnostic);
-    if (status == UMC_OK && compile) {
+    if (status == UMC_OK && (inspect_source || inspect_bytes)) {
+        UmcProgramInfo info;
+        status = umc_inspect(instructions, count, &info, &diagnostic);
+        if (status == UMC_OK) {
+            printf("Instructions: %zu\nPeak stack values: %zu\nConstants: %zu\n"
+                   "Arithmetic operations: %zu\nEncoded bytes: %zu\n",
+                info.instruction_count, info.peak_stack, info.constant_count,
+                info.arithmetic_count, info.bytecode_size);
+            puts("Structural inspection only; arithmetic has not been executed.");
+        }
+    } else if (status == UMC_OK && compile) {
         uint8_t encoded[UMC_BYTECODE_LIMIT];
         size_t bytes = 0U;
         status = umc_encode(instructions, count, encoded, sizeof(encoded), &bytes, &diagnostic);

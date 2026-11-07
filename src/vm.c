@@ -15,6 +15,10 @@
 #include "internal.h"
 #include <limits.h>
 
+/* The original validator is retained for engineering review. The shared walk
+ * below preserves its rejection rules while collecting resource facts for
+ * CLI and IDE consumers, keeping execution and inspection in agreement. */
+#if 0
 UmcStatus umc_validate(const UmcInstruction *program, size_t count, UmcDiagnostic *diagnostic)
 {
     (void)umc_fail(diagnostic, UMC_OK, 0U);
@@ -59,6 +63,84 @@ UmcStatus umc_validate(const UmcInstruction *program, size_t count, UmcDiagnosti
         return umc_fail(diagnostic, UMC_BAD_BYTECODE, program[count - 1U].source_offset);
     }
     return UMC_OK;
+}
+
+#endif
+
+static UmcStatus inspect_program(const UmcInstruction *program, size_t count,
+    UmcProgramInfo *info, UmcDiagnostic *diagnostic)
+{
+    (void)umc_fail(diagnostic, UMC_OK, 0U);
+    if (program == NULL || count == 0U || count > UMC_PROGRAM_LIMIT) {
+        return umc_fail(diagnostic, UMC_BAD_BYTECODE, 0U);
+    }
+    size_t depth = 0U;
+    size_t peak = 0U;
+    size_t constants = 0U;
+    size_t arithmetic = 0U;
+    for (size_t i = 0U; i < count; ++i) {
+        const UmcInstruction *instruction = &program[i];
+        const size_t offset = instruction->source_offset;
+        if (offset > UMC_SOURCE_LIMIT ||
+            (instruction->opcode != UMC_PUSH && instruction->operand != 0)) {
+            return umc_fail(diagnostic, UMC_BAD_BYTECODE, offset);
+        }
+        switch (instruction->opcode) {
+        case UMC_PUSH:
+            if (depth == UMC_STACK_LIMIT) {
+                return umc_fail(diagnostic, UMC_STACK_OVERFLOW, offset);
+            }
+            ++depth;
+            ++constants;
+            if (depth > peak) peak = depth;
+            break;
+        case UMC_ADD:
+        case UMC_SUBTRACT:
+        case UMC_MULTIPLY:
+        case UMC_DIVIDE:
+            if (depth < 2U) return umc_fail(diagnostic, UMC_BAD_BYTECODE, offset);
+            --depth;
+            ++arithmetic;
+            break;
+        case UMC_NEGATE:
+            if (depth == 0U) return umc_fail(diagnostic, UMC_BAD_BYTECODE, offset);
+            ++arithmetic;
+            break;
+        case UMC_RETURN:
+            if (depth != 1U || i + 1U != count) {
+                return umc_fail(diagnostic, UMC_BAD_BYTECODE, offset);
+            }
+            break;
+        default:
+            return umc_fail(diagnostic, UMC_BAD_BYTECODE, offset);
+        }
+    }
+    if (program[count - 1U].opcode != UMC_RETURN) {
+        return umc_fail(diagnostic, UMC_BAD_BYTECODE, program[count - 1U].source_offset);
+    }
+    /* Publish only after the final instruction and every operand are checked.
+     * Counts are bounded by UMC_PROGRAM_LIMIT, so the wire-size calculation
+     * cannot overflow size_t on any supported runtime target. */
+    if (info != NULL) {
+        info->instruction_count = count;
+        info->peak_stack = peak;
+        info->constant_count = constants;
+        info->arithmetic_count = arithmetic;
+        info->bytecode_size = UMC_BYTECODE_HEADER_SIZE + count * UMC_BYTECODE_RECORD_SIZE;
+    }
+    return UMC_OK;
+}
+
+UmcStatus umc_validate(const UmcInstruction *program, size_t count, UmcDiagnostic *diagnostic)
+{
+    return inspect_program(program, count, NULL, diagnostic);
+}
+
+UmcStatus umc_inspect(const UmcInstruction *program, size_t count,
+    UmcProgramInfo *info, UmcDiagnostic *diagnostic)
+{
+    if (info == NULL) return umc_fail(diagnostic, UMC_INVALID_ARGUMENT, 0U);
+    return inspect_program(program, count, info, diagnostic);
 }
 
 UmcStatus umc_execute(const UmcInstruction *program, size_t count, size_t fuel,
