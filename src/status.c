@@ -43,6 +43,12 @@ const char *umc_opcode_text(UmcOpcode opcode)
     case UMC_DIVIDE: return "divide";
     case UMC_NEGATE: return "negate";
     case UMC_RETURN: return "return";
+    case UMC_LESS: return "less";
+    case UMC_LESS_EQUAL: return "less-equal";
+    case UMC_GREATER: return "greater";
+    case UMC_GREATER_EQUAL: return "greater-equal";
+    case UMC_EQUAL: return "equal";
+    case UMC_NOT_EQUAL: return "not-equal";
     default: return "invalid";
     }
 }

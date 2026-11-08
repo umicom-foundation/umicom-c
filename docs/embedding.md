@@ -36,3 +36,9 @@ A hosted program runs under an operating system and can use facilities such as s
 Umicom Kernel's optional CVM program compiles the runtime for RISC-V and uses the Kernel's native EXIT call. The host executable cannot be copied into that address space. The Linux-based Umicom OS probe is another, separate target-native consumer. Neither arrangement makes arbitrary C programs portable.
 
 Umicom Framework owns its optional source-preview service. Applications can consume the same result model instead of implementing their own compiler error handling. That service is a source-composed optional adapter; the main Framework SDK does not automatically enable it.
+
+## Optional caller-owned traces
+
+Include `umicom_c/trace.h` and supply an array of `UmcTraceStep`, its capacity and a count output to `umc_execute_trace`. Capacity must cover the validated instruction count before execution begins. Each successful instruction records its resulting stack depth and top value; an arithmetic or fuel fault records the unchanged state before the rejected instruction. There is no host callback or retained pointer.
+
+Use the returned count to limit reads. An earlier longer trace can leave bytes beyond that count, and the low-level result still remains unchanged on failure. Concurrent consumers need their own writable arrays. The trace and ordinary APIs share one arithmetic executor; the optional Framework adapter shares one presentation lifecycle. See [the trace guide](execution-traces.md) for complete refusal and source-identity rules.

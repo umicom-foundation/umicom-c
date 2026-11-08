@@ -1,4 +1,6 @@
-# Umicom C arithmetic language
+# Umicom C integer expression language
+
+<!-- The original arithmetic-only title is retained for language-profile history: # Umicom C arithmetic language -->
 
 This implementation compiles one small, explicit C-shaped language. It is not a complete C23 compiler. The implementation is written in C23 and is built with an existing C compiler.
 
@@ -22,13 +24,26 @@ The grammar below is a compact way to describe the accepted shapes. A quoted ite
 
 ```text
 program    = "int" "main" "(" "void" ")" "{" "return" expression ";" "}" end
-expression = product (("+" | "-") product)*
+expression = relational (("==" | "!=") relational)*
+relational = additive (("<" | "<=" | ">" | ">=") additive)*
+additive   = product (("+" | "-") product)*
 product    = unary (("*" | "/") unary)*
 unary      = ("+" | "-") unary | integer | "(" expression ")"
 integer    = decimal digit followed by zero or more decimal digits
 ```
 
 Repeated subtraction and division group from the left: `20 / 5 / 2` means `(20 / 5) / 2`, giving 2.
+
+<!-- The earlier arithmetic-only grammar used: expression = product (("+" | "-") product)*
+It is retained here because the additive production preserves that behaviour. -->
+
+## Integer comparisons
+
+Use `<`, `<=`, `>`, `>=`, `==` and `!=` to compare two integer values. Each produces an integer: 1 for true and 0 for false. Arithmetic binds more tightly than relational comparisons, and relational comparisons bind more tightly than equality. Thus `2 + 3 < 2 * 3` returns 1, while `2 == 3 < 4` means `2 == (3 < 4)` and returns 0.
+
+Operators at the same level group from the left. `1 < 2 < 1` means `(1 < 2) < 1` and returns 0; it does not express a mathematical interval. Use parentheses to make your intent clear. The parser consumes `<=` as one token, but `< =` is invalid. Assignment, unary `!`, `&&`, `||`, conditionals and branches remain unsupported.
+
+Both operands execute before the comparison. `0 == (1 / 0)` fails at division; equality does not suppress a failing operand. Comparison itself does not subtract the operands, so comparing the minimum and maximum signed values does not overflow. One comparison consumes one instruction of the execution budget, like one addition.
 
 ## Numbers and failure
 

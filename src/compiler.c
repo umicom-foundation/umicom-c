@@ -92,6 +92,8 @@ static void product(UmcParser *parser, size_t depth)
     }
 }
 
+/* Retain arithmetic precedence in additive and place relational/equality parsing above it. The former implementation is retained for review. */
+#if 0
 static void expression(UmcParser *parser, size_t depth)
 {
     /* Separate precedence levels ensure 2 + 3 * 4 emits multiplication first.
@@ -104,6 +106,51 @@ static void expression(UmcParser *parser, size_t depth)
         advance(parser);
         product(parser, depth);
         emit(parser, token.kind == UMC_TOKEN_PLUS ? UMC_ADD : UMC_SUBTRACT, 0, token.offset);
+    }
+}
+#endif
+
+static void additive(UmcParser *parser, size_t depth)
+{
+    /* Separate precedence levels ensure 2 + 3 * 4 emits multiplication first.
+     * Iteration makes repeated binary operators left associative without adding
+     * a recursive call for every term in a long expression. */
+    product(parser, depth);
+    while (parser->status == UMC_OK &&
+           (parser->token.kind == UMC_TOKEN_PLUS || parser->token.kind == UMC_TOKEN_MINUS)) {
+        const UmcToken token = parser->token;
+        advance(parser);
+        product(parser, depth);
+        emit(parser, token.kind == UMC_TOKEN_PLUS ? UMC_ADD : UMC_SUBTRACT, 0, token.offset);
+    }
+}
+
+/* Relational and equality levels preserve C-style precedence. Each compares
+ * two evaluated int32 values and emits a canonical zero-or-one stack result. */
+static void relational(UmcParser *parser, size_t depth)
+{
+    additive(parser, depth);
+    while (parser->status == UMC_OK &&
+        (parser->token.kind == UMC_TOKEN_LESS || parser->token.kind == UMC_TOKEN_LESS_EQUAL ||
+         parser->token.kind == UMC_TOKEN_GREATER || parser->token.kind == UMC_TOKEN_GREATER_EQUAL)) {
+        const UmcToken token = parser->token;
+        advance(parser);
+        additive(parser, depth);
+        UmcOpcode opcode = token.kind == UMC_TOKEN_LESS ? UMC_LESS :
+            token.kind == UMC_TOKEN_LESS_EQUAL ? UMC_LESS_EQUAL :
+            token.kind == UMC_TOKEN_GREATER ? UMC_GREATER : UMC_GREATER_EQUAL;
+        emit(parser, opcode, 0, token.offset);
+    }
+}
+static void expression(UmcParser *parser, size_t depth)
+{
+    relational(parser, depth);
+    while (parser->status == UMC_OK &&
+        (parser->token.kind == UMC_TOKEN_EQUAL || parser->token.kind == UMC_TOKEN_NOT_EQUAL)) {
+        const UmcToken token = parser->token;
+        advance(parser);
+        relational(parser, depth);
+        emit(parser, token.kind == UMC_TOKEN_EQUAL ? UMC_EQUAL : UMC_NOT_EQUAL, 0, token.offset);
     }
 }
 

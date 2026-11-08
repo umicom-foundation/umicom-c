@@ -51,7 +51,8 @@ Use a new output filename for compilation. Existing files are preserved. Source 
 | Instructions | Operation count, including RETURN |
 | Peak stack values | Largest number of temporary integers needed |
 | Constants | Number of PUSH operations |
-| Arithmetic operations | Binary operations plus NEGATE |
+<!-- Earlier arithmetic-only definition: | Arithmetic operations | Binary operations plus NEGATE | -->
+| Arithmetic operations | ADD, SUBTRACT, MULTIPLY, DIVIDE and NEGATE; excludes comparisons |
 | Encoded bytes | Eight-byte header plus nine bytes per instruction |
 
 ## Use the library
@@ -67,7 +68,8 @@ if (status == UMC_OK) {
 
 Here program must point to count valid instruction objects, with count within the public limit. The caller keeps the input immutable during the call. The report and optional diagnostic must not overlap the program or each other. The output report remains unchanged when inspection fails. A diagnostic message uses static storage and must not be freed.
 
-The same validation walk serves umc_validate, umc_inspect and the validation stage of umc_execute. The old standalone validator is preserved in a disabled block for review. No bytecode format or opcode changed.
+The same validation walk serves umc_validate, umc_inspect and the validation stage of umc_execute. The old standalone validator is preserved in a disabled block for review. <!-- Earlier inspection-only scope: No bytecode format or opcode changed. -->
+Inspection itself does not execute instructions. The later comparison extension appends opcodes and selects wire format 2 as described in the bytecode guide.
 
 ## Understand the limits
 
@@ -82,3 +84,9 @@ ctest --preset windows-ucrt64-debug -R "^umicom[.]c[.](inspection|cli-inspection
 ```
 
 The regression groups cover stack and instruction limits, unknown opcodes, reserved operands, early return, unchanged output on failure, wire-size agreement and command argument rejection. A passing test report must come from executing these commands against the relevant source and toolchain. The commands above are instructions to run, not an execution record.
+
+## Count comparisons separately from arithmetic
+
+For `int main(void) { return 2 + 3 < 2 * 3; }`, the expected report is eight instructions, a peak stack of three values, four constants, two arithmetic operations and eighty encoded bytes. The LESS instruction is included in the total instruction count and consumes two stack values before pushing one. It is excluded from `arithmetic_count`, which retains its earlier meaning. The final RETURN is also included in the instruction count.
+
+Inspection cannot tell you that the comparison will finish successfully: an operand can still divide by zero or overflow. For example, `0 == (1 / 0)` has a valid structure but execution fails before equality. The same source, instruction and stack limits apply to both profiles. Qualify the comparison cases with `ctest --preset windows-ucrt64-debug -R "comparison" --output-on-failure --no-tests=error`; source presence is not an executed result.

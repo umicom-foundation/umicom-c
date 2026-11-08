@@ -17,3 +17,14 @@ It includes Windows commands, expected results and a controlled failure to inspe
 ## Program inspection
 
 Use `umicom-c inspect source.uc` or `umicom-c inspect-bytecode program.umcb` to examine instruction counts, stack requirements and portable bytecode size before execution. See [Inspect a program before execution](docs/program-inspection.md) for setup, API ownership, examples and limitations.
+
+## Execution traces
+
+Use `umicom-c trace source.uc` or `umicom-c trace-bytecode program.umcb` to observe the shared arithmetic executor. Rows describe successful operations and a rejected runtime step; malformed input and insufficient trace storage execute nothing. Read [Observe a bounded execution trace](docs/execution-traces.md) for command examples, caller-owned buffers, fuel and output-preservation rules. <!-- Trace-only addition originally stated: The bytecode format and existing execution API remain unchanged. -->
+The trace API keeps the same storage contract. The comparison extension described below selects an additional wire profile.
+
+## Integer comparison expressions
+
+The current expression grammar also accepts `<`, `<=`, `>`, `>=`, `==` and `!=`. Arithmetic binds first, followed by relational comparisons, then equality. Results are signed integers 0 or 1. Both operands execute; this extension adds no logical short-circuiting, branches, variables or full C23 support.
+
+Existing arithmetic artifacts retain their exact format-1 encoding. Programs containing comparisons use format 2, which older runtimes reject. Read [the language grammar](docs/language.md) and [profile compatibility](docs/bytecode.md#profile-compatibility) before updating a consumer. The source, runtime, wire and CLI comparison groups supply independent expected values; Framework and Kernel have separate consumer checks. All must be executed against the selected source and toolchain before claiming qualification.

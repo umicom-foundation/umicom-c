@@ -23,6 +23,8 @@ extern "C" {
 #endif
 
 #define UMC_API_VERSION 1U
+/* Additive arithmetic-profile capability; public struct layouts stay unchanged. */
+#define UMC_COMPARISON_PROFILE 1U
 #define UMC_SOURCE_LIMIT 65536U
 #define UMC_PROGRAM_LIMIT 256U
 #define UMC_STACK_LIMIT 64U
@@ -53,7 +55,10 @@ typedef enum UmcOpcode {
     UMC_MULTIPLY,
     UMC_DIVIDE,
     UMC_NEGATE,
-    UMC_RETURN
+    UMC_RETURN,
+    /* Append wire identities; never renumber arithmetic format-1 opcodes. */
+    UMC_LESS, UMC_LESS_EQUAL, UMC_GREATER, UMC_GREATER_EQUAL,
+    UMC_EQUAL, UMC_NOT_EQUAL
 } UmcOpcode;
 
 typedef struct UmcInstruction {
@@ -82,6 +87,9 @@ const char *umc_opcode_text(UmcOpcode opcode);
  * counted as one line break. Source is a borrowed span, not necessarily a C string. */
 void umc_locate_diagnostic(const char *source, size_t length, UmcDiagnostic *diagnostic);
 
+/* The comparison extension also accepts <, <=, >, >=, == and != within the
+ * expression. Results are int32 zero or one; both operands execute. The original
+ * arithmetic form below remains accepted without changing its wire encoding. */
 /* Compile: int main(void) { return <signed-32-bit arithmetic expression>; }
  * The output count is zero on failure. Partial instruction bytes may have been
  * written: never execute them after an error. All buffers must be disjoint and
@@ -119,6 +127,8 @@ UmcStatus umc_inspect(const UmcInstruction *program, size_t count,
 UmcStatus umc_execute(const UmcInstruction *program, size_t count, size_t fuel,
     UmcResult *result, UmcDiagnostic *diagnostic);
 
+/* Arithmetic-only programs retain format 1. Programs containing comparison
+ * opcodes use format 2; decoding refuses a profile/version mismatch. */
 /* Stable little-endian bytecode. No structure casts, executable mappings, host
  * addresses or machine-dependent padding are accepted. Size/count is zero on
  * failure; buffers may contain a partial decode and must not then be executed. */

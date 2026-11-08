@@ -113,7 +113,10 @@ exercise shows that completing the multiplication is different from completing
 the program. An instruction budget is not a wall-clock timeout or an operating
 system security sandbox.
 
-`--max-steps` accepts a decimal integer from 1 to 256 on `run` and `exec` only.
+<!-- Earlier command scope, retained for review after adding trace commands:
+`&#45;&#45;max-steps` accepts a decimal integer from 1 to 256 on `run` and `exec` only.
+-->
+`--max-steps` accepts a decimal integer from 1 to 256 on `run`, `exec`, `trace` and `trace-bytecode`.
 The default remains 256. Zero, negative values, excessive values, repeated
 options and options on `check` are rejected. Exit code 2 reports command/input
 usage failures; code 1 reports compilation or runtime diagnostics.
@@ -137,3 +140,23 @@ Read [the first program guide](first-program.md) next for the existing language
 and bytecode boundaries. Adding variables, types, native code generation or
 full C23 compatibility requires new language rules and tests; the arithmetic
 profile does not already provide those capabilities.
+
+## 7. Observe execution without changing the format
+
+Continue with [execution traces](execution-traces.md). `trace` compiles and executes source; `trace-bytecode` decodes and executes an existing artifact. Both share the same checked runtime as `run` and `exec`. A failed arithmetic or fuel step remains visible, while the final result is published only on success. This makes a predicted stack table directly comparable to runtime observations.
+
+## 8. Compare two arithmetic results
+
+The comparison example is part of the repository. After rebuilding the compiler, run:
+
+```powershell
+& ".\build\windows-ucrt64-debug\bin\umicom-c.exe" inspect ".\examples\comparison.uc"
+& ".\build\windows-ucrt64-debug\bin\umicom-c.exe" trace ".\examples\comparison.uc" --max-steps 8
+ctest --preset windows-ucrt64-debug -R "comparison" --output-on-failure --no-tests=error
+```
+
+The expression `2 + 3 < 2 * 3` completes both arithmetic operands before comparing 5 with 6. Expect eight instructions, a peak stack of three, four constants, two arithmetic operations and eighty encoded bytes. The final result should be 1. A false comparison returns 0 with a successful command exit; the numeric answer and process status have different meanings.
+
+The operators `<`, `<=`, `>`, `>=`, `==` and `!=` are supported. Both operands execute. There are still no variables, conditionals, calls or logical short-circuit operators. Changing the source to `0 == (1 / 0)` should fail at the division without an equality or return result.
+
+Comparison artifacts use wire format 2. Existing arithmetic programs keep their exact format-1 encoding. Use a fresh output name if you compile this example, and qualify the runtime used by every dependent consumer. An older runtime rejecting format 2 is a compatibility refusal, not a reason to alter the artifact header manually.

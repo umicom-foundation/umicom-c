@@ -137,6 +137,18 @@ UmcStatus umc_lex_next(UmcLexer *lexer, UmcToken *token, UmcDiagnostic *diagnost
     case '{': token->kind = UMC_TOKEN_OPEN; break;
     case '}': token->kind = UMC_TOKEN_CLOSE; break;
     case ';': token->kind = UMC_TOKEN_SEMICOLON; break;
+    /* Longest-match lookahead stays within the borrowed source span. A bare
+     * '=' or '!' is outside this expression profile and fails at its own byte. */
+    case '<': case '>': case '=': case '!': {
+        const bool paired = lexer->position < lexer->length && lexer->source[lexer->position] == '=';
+        if ((c == '=' || c == '!') && !paired)
+            return umc_fail(diagnostic, UMC_SYNTAX_ERROR, start);
+        if (paired) ++lexer->position;
+        if (c == '<') token->kind = paired ? UMC_TOKEN_LESS_EQUAL : UMC_TOKEN_LESS;
+        else if (c == '>') token->kind = paired ? UMC_TOKEN_GREATER_EQUAL : UMC_TOKEN_GREATER;
+        else token->kind = c == '=' ? UMC_TOKEN_EQUAL : UMC_TOKEN_NOT_EQUAL;
+        break;
+    }
     default: return umc_fail(diagnostic, UMC_SYNTAX_ERROR, start);
     }
     return UMC_OK;

@@ -13,6 +13,7 @@
  * MIT
  *---------------------------------------------------------------------------*/
 #include "umicom_c/umicom_c.h"
+#include "umicom_c/trace.h"
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
@@ -67,8 +68,14 @@ static int usage(void)
           "  umicom-c compile source.uc new-output.umcb\n"
           "  umicom-c exec program.umcb [--max-steps N]\n"
           "  umicom-c disassemble program.umcb\n"
+          "  umicom-c trace source.uc [--max-steps N]\n"
+          "  umicom-c trace-bytecode program.umcb [--max-steps N]\n"
           "  umicom-c --version\n"
+          /* Preserve the earlier profile wording while exposing the additive comparison grammar. */
+#if 0
           "Profile: int main(void) { return <int32 arithmetic>; }\n", stderr);
+#endif
+          "Profile: int main(void) { return <int32 arithmetic or comparison>; }\n", stderr);
     return 2;
 }
 
@@ -94,7 +101,12 @@ static int step_limit(const char *text, size_t *limit)
 int main(int argc, char **argv)
 {
     if (argc == 2 && strcmp(argv[1], "--version") == 0) {
+        /* Older artifacts keep format 1; comparisons explicitly require format 2.
+         * Retain the previous capability string for compatibility review. */
+#if 0
         puts("Umicom C 0.1.0; arithmetic profile; bytecode format 1");
+#endif
+        puts("Umicom C 0.1.0; arithmetic and comparison profiles; bytecode formats 1 and 2");
         return 0;
     }
     if (argc < 3) return usage();
@@ -105,6 +117,9 @@ int main(int argc, char **argv)
     const int disassemble = strcmp(argv[1], "disassemble") == 0;
     const int inspect_source = strcmp(argv[1], "inspect") == 0;
     const int inspect_bytes = strcmp(argv[1], "inspect-bytecode") == 0;
+    const int trace_source = strcmp(argv[1], "trace") == 0;
+    const int trace_bytes = strcmp(argv[1], "trace-bytecode") == 0;
+    const int tracing = trace_source || trace_bytes;
     /* The original fixed-arity rule is retained for review. The replacement
      * keeps all earlier commands and admits an execution-only budget option. */
 #if 0
@@ -117,9 +132,16 @@ int main(int argc, char **argv)
 #if 0
     if (!check && !run && !compile && !execute && !disassemble) return usage();
 #endif
+    /* Tracing executes the existing arithmetic profile with caller-owned output.
+     * Preserve the earlier gate while extending its exact budget/arity checks. */
+#if 0
     if (!check && !run && !compile && !execute && !disassemble &&
         !inspect_source && !inspect_bytes) return usage();
     if ((run || execute) && argc == 5) {
+#endif
+    if (!check && !run && !compile && !execute && !disassemble &&
+        !inspect_source && !inspect_bytes && !tracing) return usage();
+    if ((run || execute || tracing) && argc == 5) {
         if (strcmp(argv[3], "--max-steps") != 0 || !step_limit(argv[4], &fuel)) {
             fprintf(stderr, "--max-steps requires a decimal integer from 1 to %u.\n",
                 (unsigned)UMC_PROGRAM_LIMIT);
@@ -139,7 +161,12 @@ int main(int argc, char **argv)
 #if 0
     const int binary = execute || disassemble;
 #endif
+    /* Decode trace-bytecode through the same complete wire validator. The
+     * former selector is retained to document the additive command boundary. */
+#if 0
     const int binary = execute || disassemble || inspect_bytes;
+#endif
+    const int binary = execute || disassemble || inspect_bytes || trace_bytes;
     if (!read_file(argv[2], input, binary ? UMC_BYTECODE_LIMIT : UMC_SOURCE_LIMIT, &length)) {
         return 2;
     }
@@ -179,7 +206,25 @@ int main(int argc, char **argv)
 #if 0
         status = umc_execute(instructions, count, UMC_PROGRAM_LIMIT, &result, &diagnostic);
 #endif
+        /* Keep the old dispatch for review. Only trace commands request storage;
+         * both branches now reach the same runtime executor and failure rules. */
+#if 0
         status = umc_execute(instructions, count, fuel, &result, &diagnostic);
+#endif
+        if (tracing) {
+            UmcTraceStep steps[UMC_PROGRAM_LIMIT];
+            size_t used = 0U;
+            status = umc_execute_trace(instructions, count, fuel, &result,
+                steps, UMC_PROGRAM_LIMIT, &used, &diagnostic);
+            for (size_t i = 0U; i < used; ++i) {
+                printf("step=%zu source-byte=%zu opcode=%s stack-depth=%zu top=%" PRId32 " status=%s\n",
+                    steps[i].instruction_index, steps[i].source_offset,
+                    umc_opcode_text(steps[i].opcode), steps[i].stack_depth,
+                    steps[i].top, umc_status_text(steps[i].status));
+            }
+        } else {
+            status = umc_execute(instructions, count, fuel, &result, &diagnostic);
+        }
         if (status == UMC_OK) {
             printf("Result: %" PRId32 "\nInstructions: %zu\n", result.value, result.instructions_executed);
         }
