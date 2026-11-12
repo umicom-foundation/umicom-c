@@ -160,3 +160,11 @@ The expression `2 + 3 < 2 * 3` completes both arithmetic operands before compari
 The operators `<`, `<=`, `>`, `>=`, `==` and `!=` are supported. Both operands execute. There are still no variables, conditionals, calls or logical short-circuit operators. Changing the source to `0 == (1 / 0)` should fail at the division without an equality or return result.
 
 Comparison artifacts use wire format 2. Existing arithmetic programs keep their exact format-1 encoding. Use a fresh output name if you compile this example, and qualify the runtime used by every dependent consumer. An older runtime rejecting format 2 is a compatibility refusal, not a reason to alter the artifact header manually.
+
+## 9. Keep input observations with test results
+
+Follow [configuration input evidence](configuration-inputs.md) to compare the current declared inputs with the last configuration. Save that record alongside the actual build and test output. A matching record, an existing executable and a passing test report are separate observations; each needs its source, tool and time context. The check never repairs a stale record.
+
+## Compare two sources without execution
+
+Use `umicom-c compare-operations left.uc right.uc` to compare validated opcodes and operands. Exit 0 means identical operations, 1 means different operations, and 2 means the comparison could not be completed. See [operation comparison](operation-comparison.md) for complete examples, diagnostics and why this does not authorize cache reuse.

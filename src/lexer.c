@@ -35,12 +35,50 @@ static bool matches(const char *source, size_t length, const char *word)
     return i == length && word[i] == '\0';
 }
 
+
+/* Numeric spelling is a compiler concern. Decode a bounded ASCII token into
+ * the same signed PUSH value used by decimal input; the VM and wire format do
+ * not acquire radix-specific operations. Never rely on a trailing NUL, locale,
+ * strtol, unsigned wrap, or a host-sized long. The caller consumed the zero. */
+static UmcStatus prefixed_integer(UmcLexer *lexer, UmcToken *token,
+    UmcDiagnostic *diagnostic, size_t start, int32_t base)
+{
+    ++lexer->position; /* Consume the admitted x/X/b/B prefix byte. */
+    const size_t digits_start = lexer->position;
+    int32_t value = 0;
+    while (lexer->position < lexer->length) {
+        const unsigned char c = (unsigned char)lexer->source[lexer->position];
+        int32_t part;
+        if (digit(c)) part = (int32_t)(c - (unsigned char)'0');
+        else if (c >= 'a' && c <= 'f') part = (int32_t)(c - (unsigned char)'a') + 10;
+        else if (c >= 'A' && c <= 'F') part = (int32_t)(c - (unsigned char)'A') + 10;
+        else break;
+        if (part >= base)
+            return umc_fail(diagnostic, UMC_SYNTAX_ERROR, lexer->position);
+        /* Check before multiplication so even the rejected token never causes
+         * signed overflow. Range diagnostics identify the start of the token. */
+        if (value > (INT32_MAX - part) / base)
+            return umc_fail(diagnostic, UMC_LITERAL_RANGE, start);
+        value = value * base + part;
+        ++lexer->position;
+    }
+    if (lexer->position == digits_start)
+        return umc_fail(diagnostic, UMC_SYNTAX_ERROR, start);
+    if (lexer->position < lexer->length &&
+        identifier_start((unsigned char)lexer->source[lexer->position]))
+        return umc_fail(diagnostic, UMC_SYNTAX_ERROR, lexer->position);
+    token->kind = UMC_TOKEN_INTEGER;
+    token->integer = value;
+    return UMC_OK;
+}
+
 UmcStatus umc_lex_next(UmcLexer *lexer, UmcToken *token, UmcDiagnostic *diagnostic)
 {
     /* Source length was admitted by umc_compile. Lookahead always checks the
      * remaining byte count; a comment never authorizes reading past that span. */
     for (;;) {
         if (lexer->position == lexer->length) {
+            token->length = 0U;
             token->kind = UMC_TOKEN_END;
             token->integer = 0;
             token->offset = lexer->position;
@@ -94,7 +132,17 @@ UmcStatus umc_lex_next(UmcLexer *lexer, UmcToken *token, UmcDiagnostic *diagnost
     const size_t start = lexer->position;
     const unsigned char c = (unsigned char)lexer->source[lexer->position++];
     token->offset = start;
+    token->length = 1U;
     token->integer = 0;
+    /* Explicit prefixes extend the grammar; unprefixed leading-zero tokens
+     * continue through the original decimal implementation below. */
+    if (c == '0' && lexer->position < lexer->length) {
+        const char prefix = lexer->source[lexer->position];
+        if (prefix == 'x' || prefix == 'X')
+            return prefixed_integer(lexer, token, diagnostic, start, 16);
+        if (prefix == 'b' || prefix == 'B')
+            return prefixed_integer(lexer, token, diagnostic, start, 2);
+    }
     if (digit(c)) {
         int32_t value = (int32_t)(c - (unsigned char)'0');
         while (lexer->position < lexer->length &&
@@ -124,7 +172,17 @@ UmcStatus umc_lex_next(UmcLexer *lexer, UmcToken *token, UmcDiagnostic *diagnost
         else if (matches(word, length, "main")) token->kind = UMC_TOKEN_MAIN;
         else if (matches(word, length, "void")) token->kind = UMC_TOKEN_VOID;
         else if (matches(word, length, "return")) token->kind = UMC_TOKEN_RETURN;
+        /* Non-keywords now form bounded local identifiers. Keep the former
+         * keyword-only refusal for review; the parser still controls every use. */
+#if 0
         else return umc_fail(diagnostic, UMC_SYNTAX_ERROR, start);
+#endif
+        else {
+            if (length > UMC_IDENTIFIER_LIMIT)
+                return umc_fail(diagnostic, UMC_SYNTAX_ERROR, start);
+            token->kind = UMC_TOKEN_IDENTIFIER;
+        }
+        token->length = length;
         return UMC_OK;
     }
     switch (c) {
@@ -137,12 +195,43 @@ UmcStatus umc_lex_next(UmcLexer *lexer, UmcToken *token, UmcDiagnostic *diagnost
     case '{': token->kind = UMC_TOKEN_OPEN; break;
     case '}': token->kind = UMC_TOKEN_CLOSE; break;
     case ';': token->kind = UMC_TOKEN_SEMICOLON; break;
-    /* Longest-match lookahead stays within the borrowed source span. A bare
-     * '=' or '!' is outside this expression profile and fails at its own byte. */
+    case '?': token->kind = UMC_TOKEN_QUESTION; break;
+    case ':': token->kind = UMC_TOKEN_COLON; break;
+    case '&': case '|':
+        /* Single characters remain unsupported bitwise operators. Lookahead is
+         * bounded by the borrowed span and cannot join tokens across whitespace. */
+        if (lexer->position == lexer->length || lexer->source[lexer->position] != (char)c)
+            return umc_fail(diagnostic, UMC_SYNTAX_ERROR, start);
+        ++lexer->position;
+        token->length = 2U;
+        token->kind = c == '&' ? UMC_TOKEN_AND : UMC_TOKEN_OR;
+        break;
+    /* Longest-match lookahead stays within the borrowed source span. Unary
+     * logical negation is distinct from !=; assignment remains unsupported. */
     case '<': case '>': case '=': case '!': {
         const bool paired = lexer->position < lexer->length && lexer->source[lexer->position] == '=';
+        /* The earlier profile rejected both unpaired characters. Retain its
+         * admission rule for review; the new branch admits only unary !. */
+#if 0
+    /* Longest-match lookahead stays within the borrowed source span. A bare
+     * '=' or '!' is outside this expression profile and fails at its own byte. */
         if ((c == '=' || c == '!') && !paired)
             return umc_fail(diagnostic, UMC_SYNTAX_ERROR, start);
+#endif
+        /* Assignment is admitted as a statement token, not an expression.
+         * Equality longest-match remains unchanged. */
+#if 0
+        if (c == '=' && !paired)
+            return umc_fail(diagnostic, UMC_SYNTAX_ERROR, start);
+#endif
+        if (c == '=' && !paired) {
+            token->kind = UMC_TOKEN_ASSIGN;
+            break;
+        }
+        if (c == '!' && !paired) {
+            token->kind = UMC_TOKEN_NOT;
+            break;
+        }
         if (paired) ++lexer->position;
         if (c == '<') token->kind = paired ? UMC_TOKEN_LESS_EQUAL : UMC_TOKEN_LESS;
         else if (c == '>') token->kind = paired ? UMC_TOKEN_GREATER_EQUAL : UMC_TOKEN_GREATER;

@@ -82,3 +82,7 @@ ctest --preset windows-ucrt64-debug -R "^umicom[.]c[.](trace[.]|cli-trace$)" --o
 ```
 
 Runtime cases check successful rows, arithmetic boundaries, fuel, preflight refusal, buffer reuse and wire transport. The CLI case compares source and bytecode output, rejects malformed options and checks unchanged inputs. Keep skipped coverage and missing test selections separate from passes. A compiler or linker error involving trace.h means the source or SDK selection needs attention before runtime results can be assessed.
+
+## Read traces with forward branches
+
+With logical short-circuiting, `instruction_index` retains its position in the complete program. Trace rows omit skipped records, so indices can have gaps. `trace_count` counts written rows; successful `instructions_executed` counts completed instructions. A failed fuel attempt adds one trace row but no completed result. Reserve capacity for the full program count as before. Follow [the guarded-division example](short-circuit.md) to compare 16 admitted records with an eight-instruction path.

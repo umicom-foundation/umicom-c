@@ -40,7 +40,9 @@ typedef struct UmcTraceStep {
  * insufficient storage leave steps and result unchanged with trace_count zero.
  * A runtime fault retains completed steps plus one failed attempted step; result
  * stays unchanged. Success includes RETURN. No allocation, callback, host I/O or
- * bytecode-format change is introduced. fuel may be zero, as for umc_execute. */
+ * bytecode-format change is introduced by tracing itself. fuel may be zero.
+ * With forward branches, rows retain original instruction indices and omit
+ * skipped records. Capacity still covers count; trace_count counts actual rows. */
 UmcStatus umc_execute_trace(const UmcInstruction *program, size_t count, size_t fuel,
     UmcResult *result, UmcTraceStep *steps, size_t capacity, size_t *trace_count,
     UmcDiagnostic *diagnostic);

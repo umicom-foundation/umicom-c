@@ -43,6 +43,16 @@ if(UMICOM_C_BUILD_TOOLS)
     if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(umicom-c PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
     endif()
+    # Brand only the hosted Windows executable. Freestanding runtime consumers
+    # do not enable a resource compiler or acquire a Framework dependency.
+    if(WIN32)
+        enable_language(RC)
+        set(UMICOM_C_WINDOWS_ICON "${CMAKE_CURRENT_SOURCE_DIR}/docs/assets/branding/umicom.ico")
+        configure_file(tools/umicom-c.rc.in "${CMAKE_CURRENT_BINARY_DIR}/umicom-c.rc" @ONLY)
+        target_sources(umicom-c PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/umicom-c.rc")
+        set_source_files_properties("${CMAKE_CURRENT_BINARY_DIR}/umicom-c.rc" PROPERTIES
+            OBJECT_DEPENDS "${UMICOM_C_WINDOWS_ICON}")
+    endif()
     install(TARGETS umicom-c RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 endif()
 
@@ -70,3 +80,8 @@ endif()
 # Installed consumers receive the same licence and language limits as source readers.
 install(FILES LICENSE README.md DESTINATION "${CMAKE_INSTALL_DATADIR}/doc/umicom-c")
 install(DIRECTORY docs/ DESTINATION "${CMAKE_INSTALL_DATADIR}/doc/umicom-c")
+
+# Record configuration inputs only after the full standalone graph is known.
+# This adds no dependency to the independently embedded Kernel runtime.
+include(cmake/UmicomCInputIdentity.cmake)
+umicom_c_record_configuration_inputs()

@@ -28,7 +28,8 @@ int main(void)
         {"int main(void) { return -7 / 2; }", -3},
         {"int main(void) { return +--7; }", 7},
         {"int/**/main(void) { // line\n return 40 /* block */ + 2; }", 42},
-        {"int main(void) { return (-2147483647 - 1); }", INT32_MIN}
+        {"int main(void) { return (-2147483647 - 1); }", INT32_MIN},
+        {"int main(void) { return 0x10; }", 16}
     };
     UmcInstruction program[UMC_PROGRAM_LIMIT];
     UmcDiagnostic diagnostic;
@@ -45,7 +46,12 @@ int main(void)
         "", "int main() { return 1; }", "int main(void) { return 1 }",
         "int main(void) { return 1; } garbage", "int main(void) { return 1 2; }",
         "int main(void) { return 1/**/2; }", "int main(void) { return (1 +); }",
-        "int main(void) { return foo; }", "int main(void) { return 0x10; }",
+        "int main(void) { return foo; }",
+        /* The earlier profile refused this spelling. Retain the old case for
+         * review; the success corpus above now verifies its admitted value. */
+#if 0
+        "int main(void) { return 0x10; }",
+#endif
         "int main(void) { return 1; } /* missing", "#define X 1\nint main(void){return X;}"
     };
     for (size_t i = 0U; i < sizeof(invalid) / sizeof(invalid[0]); ++i) {

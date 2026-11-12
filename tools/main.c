@@ -14,6 +14,8 @@
  *---------------------------------------------------------------------------*/
 #include "umicom_c/umicom_c.h"
 #include "umicom_c/trace.h"
+#include "umicom_c/profile.h"
+#include "umicom_c/comparison.h"
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
@@ -62,6 +64,7 @@ static int usage(void)
 {
     fputs("Usage:\n"
           "  umicom-c check source.uc\n"
+          "  umicom-c compare-operations left.uc right.uc\n"
           "  umicom-c inspect source.uc\n"
           "  umicom-c inspect-bytecode program.umcb\n"
           "  umicom-c run source.uc [--max-steps N]\n"
@@ -71,11 +74,16 @@ static int usage(void)
           "  umicom-c trace source.uc [--max-steps N]\n"
           "  umicom-c trace-bytecode program.umcb [--max-steps N]\n"
           "  umicom-c --version\n"
+          "  umicom-c profile\n"
           /* Preserve the earlier profile wording while exposing the additive comparison grammar. */
 #if 0
           "Profile: int main(void) { return <int32 arithmetic>; }\n", stderr);
 #endif
+          /* The return-expression profile is retained as a valid subset. */
+#if 0
           "Profile: int main(void) { return <int32 arithmetic or comparison>; }\n", stderr);
+#endif
+          "Profile: int main(void) { [initialized int locals and assignments] return <int32 expression>; }\n", stderr);
     return 2;
 }
 
@@ -98,8 +106,102 @@ static int step_limit(const char *text, size_t *limit)
     return 1;
 }
 
+/* This command does not open a source file or execute a program. Separate
+ * component keys keep source features distinct from runtime and wire support. */
+/* Append local capacity keys while preserving the existing machine-readable profile schema and component separation. The predecessor remains disabled for review. */
+#if 0
+static int print_profile(void)
+{
+    printf("profile.schema=1\n"
+        "compiler.api=%" PRIu32 "\ncompiler.features=%" PRIu32 "\n"
+        "compiler.source-bytes=%" PRIu32 "\ncompiler.instructions=%" PRIu32 "\n"
+        "compiler.parse-depth=%" PRIu32 "\n"
+        "runtime.api=%" PRIu32 "\nruntime.features=%" PRIu32 "\n"
+        "runtime.instructions=%" PRIu32 "\nruntime.stack-values=%" PRIu32 "\n"
+        "runtime.bytecode-bytes=%" PRIu32 "\nruntime.wire-versions=%" PRIu32 "\n",
+        umc_compiler_profile(UMC_PROFILE_API), umc_compiler_profile(UMC_PROFILE_FEATURES),
+        umc_compiler_profile(UMC_PROFILE_SOURCE_BYTES), umc_compiler_profile(UMC_PROFILE_PROGRAM_INSTRUCTIONS),
+        umc_compiler_profile(UMC_PROFILE_PARSE_DEPTH),
+        umc_runtime_profile(UMC_PROFILE_API), umc_runtime_profile(UMC_PROFILE_FEATURES),
+        umc_runtime_profile(UMC_PROFILE_PROGRAM_INSTRUCTIONS), umc_runtime_profile(UMC_PROFILE_STACK_VALUES),
+        umc_runtime_profile(UMC_PROFILE_BYTECODE_BYTES), umc_runtime_profile(UMC_PROFILE_WIRE_VERSIONS));
+    return ferror(stdout) ? 1 : 0;
+}
+
+#endif
+
+static int print_profile(void)
+{
+    printf("profile.schema=1\n"
+        "compiler.api=%" PRIu32 "\ncompiler.features=%" PRIu32 "\n"
+        "compiler.source-bytes=%" PRIu32 "\ncompiler.instructions=%" PRIu32 "\n"
+        "compiler.parse-depth=%" PRIu32 "\n"
+        "runtime.api=%" PRIu32 "\nruntime.features=%" PRIu32 "\n"
+        "runtime.instructions=%" PRIu32 "\nruntime.stack-values=%" PRIu32 "\n"
+        "runtime.bytecode-bytes=%" PRIu32 "\nruntime.wire-versions=%" PRIu32 "\n",
+        umc_compiler_profile(UMC_PROFILE_API), umc_compiler_profile(UMC_PROFILE_FEATURES),
+        umc_compiler_profile(UMC_PROFILE_SOURCE_BYTES), umc_compiler_profile(UMC_PROFILE_PROGRAM_INSTRUCTIONS),
+        umc_compiler_profile(UMC_PROFILE_PARSE_DEPTH),
+        umc_runtime_profile(UMC_PROFILE_API), umc_runtime_profile(UMC_PROFILE_FEATURES),
+        umc_runtime_profile(UMC_PROFILE_PROGRAM_INSTRUCTIONS), umc_runtime_profile(UMC_PROFILE_STACK_VALUES),
+        umc_runtime_profile(UMC_PROFILE_BYTECODE_BYTES), umc_runtime_profile(UMC_PROFILE_WIRE_VERSIONS));
+    printf("compiler.local-values=%" PRIu32 "\ncompiler.identifier-bytes=%" PRIu32 "\nruntime.local-values=%" PRIu32 "\n",
+        umc_compiler_profile(UMC_PROFILE_LOCAL_VALUES),
+        umc_compiler_profile(UMC_PROFILE_IDENTIFIER_BYTES),
+        umc_runtime_profile(UMC_PROFILE_LOCAL_VALUES));
+    return ferror(stdout) ? 1 : 0;
+}
+
+
+/* File ownership stays in the hosted command. The existing core comparison
+ * service decides validated opcode/operand identity; the CLI neither executes
+ * either program nor invents a second semantic comparison implementation. */
+static int compare_operations(const char *left_path, const char *right_path)
+{
+    uint8_t source[UMC_SOURCE_LIMIT];
+    UmcInstruction left[UMC_PROGRAM_LIMIT], right[UMC_PROGRAM_LIMIT];
+    UmcDiagnostic diagnostic;
+    size_t counts[2] = {0U, 0U};
+    const char *paths[2] = {left_path, right_path};
+    UmcInstruction *programs[2] = {left, right};
+    for (size_t side = 0U; side < 2U; ++side) {
+        size_t bytes = 0U;
+        if (!read_file(paths[side], source, sizeof source, &bytes)) return 2;
+        if (umc_compile((const char *)source, bytes, programs[side],
+            UMC_PROGRAM_LIMIT, &counts[side], &diagnostic) != UMC_OK) {
+            fprintf(stderr, "%s:%zu:%zu: %s\n", paths[side], diagnostic.line,
+                diagnostic.column, diagnostic.message);
+            return 2;
+        }
+    }
+    bool equal = false;
+    if (umc_program_same_operations(left, counts[0], right, counts[1],
+        &equal, &diagnostic) != UMC_OK) {
+        fprintf(stderr, "Cannot compare operations: %s\n", diagnostic.message);
+        return 2;
+    }
+    printf("operations=%s\nleft.instructions=%zu\nright.instructions=%zu\n"
+        "source-locations=not-compared\nexecution=not-performed\n",
+        equal ? "same" : "different", counts[0], counts[1]);
+    /* Observe buffered-report failures before returning a semantic result.
+     * The former check detected only errors already raised by printf; retain
+     * it for review while flushing this command's short report explicitly. */
+#if 0
+    if (ferror(stdout)) return 2;
+#endif
+    if (fflush(stdout) != 0 || ferror(stdout)) return 2;
+    /* Deliberately distinguish a valid difference from invalid input. This
+     * command-specific result must not be mistaken for general C equivalence,
+     * matching diagnostic locations, binary identity or build-cache approval. */
+    return equal ? 0 : 1;
+}
+
 int main(int argc, char **argv)
 {
+    if (argc >= 2 && strcmp(argv[1], "compare-operations") == 0)
+        return argc == 4 ? compare_operations(argv[2], argv[3]) : usage();
+    if (argc >= 2 && strcmp(argv[1], "profile") == 0)
+        return argc == 2 ? print_profile() : usage();
     if (argc == 2 && strcmp(argv[1], "--version") == 0) {
         /* Older artifacts keep format 1; comparisons explicitly require format 2.
          * Retain the previous capability string for compatibility review. */

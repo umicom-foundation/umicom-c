@@ -1,3 +1,5 @@
+![Umicom](assets/branding/umicom-logo.svg)
+
 # Embed the compiler and runtime
 
 An SDK is a library, its public declarations and the metadata needed to link another program to it. Umicom C exports two CMake targets:
@@ -42,3 +44,7 @@ Umicom Framework owns its optional source-preview service. Applications can cons
 Include `umicom_c/trace.h` and supply an array of `UmcTraceStep`, its capacity and a count output to `umc_execute_trace`. Capacity must cover the validated instruction count before execution begins. Each successful instruction records its resulting stack depth and top value; an arithmetic or fuel fault records the unchanged state before the rejected instruction. There is no host callback or retained pointer.
 
 Use the returned count to limit reads. An earlier longer trace can leave bytes beyond that count, and the low-level result still remains unchanged on failure. Concurrent consumers need their own writable arrays. The trace and ordinary APIs share one arithmetic executor; the optional Framework adapter shares one presentation lifecycle. See [the trace guide](execution-traces.md) for complete refusal and source-identity rules.
+
+## Discover the linked component
+
+Include umicom_c/profile.h and use umc_compiler_profile or umc_runtime_profile to query the linked component. [Capability profiles](capability-profiles.md) explains source/runtime distinctions, feature masks, limits and older-library link failures. Existing operation status checks and source identity records remain necessary.

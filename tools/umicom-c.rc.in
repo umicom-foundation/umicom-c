@@ -1,0 +1,18 @@
+/*-----------------------------------------------------------------------------
+ * Umicom C
+ * File: tools/umicom-c.rc.in
+ *
+ * PURPOSE:
+ *   Embed the approved Umicom Windows icon in the hosted compiler command.
+ *
+ * AUTHOR AND ORGANISATION:
+ * Sammy Hegab
+ * Umicom Foundation
+ *
+ * LICENCE:
+ * MIT
+ *---------------------------------------------------------------------------*/
+
+/* The standalone CLI has no Framework runtime dependency. The build supplies
+ * the approved master copy already shipped with its offline documentation. */
+1 ICON "@UMICOM_C_WINDOWS_ICON@"

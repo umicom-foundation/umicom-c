@@ -25,6 +25,17 @@ extern "C" {
 #define UMC_API_VERSION 1U
 /* Additive arithmetic-profile capability; public struct layouts stay unchanged. */
 #define UMC_COMPARISON_PROFILE 1U
+/* Source grammar capability; ! lowers to format-2 comparison instructions. */
+#define UMC_LOGICAL_NOT_PROFILE 1U
+/* Explicit hexadecimal/binary prefixes retain the same signed literal range. */
+#define UMC_PREFIXED_INTEGER_PROFILE 1U
+#define UMC_LOCAL_INTEGER_PROFILE 1U
+/* Additive source operators and their bounded, forward-only runtime control flow. */
+#define UMC_LOGICAL_CONNECTIVE_PROFILE 1U
+#define UMC_CONDITIONAL_EXPRESSION_PROFILE 1U
+#define UMC_FORWARD_BRANCH_PROFILE 1U
+#define UMC_LOCAL_LIMIT 32U
+#define UMC_IDENTIFIER_LIMIT 63U
 #define UMC_SOURCE_LIMIT 65536U
 #define UMC_PROGRAM_LIMIT 256U
 #define UMC_STACK_LIMIT 64U
@@ -45,7 +56,8 @@ typedef enum UmcStatus {
     UMC_STACK_OVERFLOW,
     UMC_FUEL_EXHAUSTED,
     UMC_ARITHMETIC_ERROR,
-    UMC_BUFFER_TOO_SMALL
+    UMC_BUFFER_TOO_SMALL,
+    UMC_LOCAL_CAPACITY
 } UmcStatus;
 
 typedef enum UmcOpcode {
@@ -58,7 +70,11 @@ typedef enum UmcOpcode {
     UMC_RETURN,
     /* Append wire identities; never renumber arithmetic format-1 opcodes. */
     UMC_LESS, UMC_LESS_EQUAL, UMC_GREATER, UMC_GREATER_EQUAL,
-    UMC_EQUAL, UMC_NOT_EQUAL
+    UMC_EQUAL, UMC_NOT_EQUAL,
+    /* Format 3 slots are bounded integers, never native addresses. */
+    UMC_LOAD_LOCAL, UMC_STORE_LOCAL,
+    /* Format 4 uses absolute forward instruction indices, never native addresses. */
+    UMC_JUMP, UMC_JUMP_IF_ZERO
 } UmcOpcode;
 
 typedef struct UmcInstruction {
@@ -90,21 +106,35 @@ void umc_locate_diagnostic(const char *source, size_t length, UmcDiagnostic *dia
 /* The comparison extension also accepts <, <=, >, >=, == and != within the
  * expression. Results are int32 zero or one; both operands execute. The original
  * arithmetic form below remains accepted without changing its wire encoding. */
+/* Unary ! evaluates its operand then compares it with zero. It uses two
+ * additional instructions and retains all normal source/depth/stack limits. */
+/* Integer tokens accept decimal, 0x/0X hexadecimal and 0b/0B binary, up to
+ * INT32_MAX. Unprefixed leading zeroes remain decimal, not C octal. Signs
+ * are unary operations; suffixes, separators and unsigned types are excluded. */
 /* Compile: int main(void) { return <signed-32-bit arithmetic expression>; }
  * The output count is zero on failure. Partial instruction bytes may have been
  * written: never execute them after an error. All buffers must be disjoint and
  * valid for their stated capacities. The compiler retains no caller pointers. */
+/* Before return, the current grammar admits initialized int declarations and
+ * assignments to previously declared locals. Names have at most 63 ASCII bytes;
+ * at most 32 slots exist. Initializers cannot read the variable being declared.
+ * There are no nested scopes, calls or assignment expressions. */
 UmcStatus umc_compile(const char *source, size_t length,
     UmcInstruction *output, size_t capacity, size_t *count,
     UmcDiagnostic *diagnostic);
 
 /* Validation checks the entire program, including bytes after RETURN, before
- * execution begins. Programs have no branch, memory or host-call instructions. */
+ * execution begins. The original profile has no branch, memory or host-call
+ * instructions. The local extension adds only bounded per-execution integer
+ * slots; every LOAD must follow a STORE. No native addresses are exposed.
+ * The forward-branch extension checks all structural paths, equal stack depth
+ * at joins, and stores on every incoming path before each local read. */
 UmcStatus umc_validate(const UmcInstruction *program, size_t count,
     UmcDiagnostic *diagnostic);
 
-/* Structural facts for the current straight-line bytecode profile. These are
- * counts, not host memory sizes or a guarantee that arithmetic will succeed. */
+/* Originally these facts described straight-line bytecode. They now count
+ * all admitted records, including alternative paths; peak_stack is the maximum
+ * over those paths. Counts are not a guarantee that arithmetic will succeed. */
 typedef struct UmcProgramInfo {
     size_t instruction_count;
     size_t peak_stack;
@@ -117,7 +147,9 @@ typedef struct UmcProgramInfo {
  * supplies these facts. Output is unchanged on failure; it must be disjoint
  * from the program and optional diagnostic. Program memory is borrowed and
  * must remain immutable throughout the call. Successful execution of this
- * branch-free profile needs instruction_count fuel, including RETURN. */
+ * branch-free profile needs instruction_count fuel, including RETURN. Forward
+ * branches make that count a sufficient upper bound; skipped records consume
+ * no fuel and successful execution can require fewer instructions. */
 UmcStatus umc_inspect(const UmcInstruction *program, size_t count,
     UmcProgramInfo *info, UmcDiagnostic *diagnostic);
 
@@ -128,7 +160,9 @@ UmcStatus umc_execute(const UmcInstruction *program, size_t count, size_t fuel,
     UmcResult *result, UmcDiagnostic *diagnostic);
 
 /* Arithmetic-only programs retain format 1. Programs containing comparison
- * opcodes use format 2; decoding refuses a profile/version mismatch. */
+ * opcodes use format 2 when no locals occur. LOAD_LOCAL or STORE_LOCAL requires
+ * format 3 when no branches occur. JUMP or JUMP_IF_ZERO requires format 4.
+ * Decoding refuses any mismatch with the minimum required profile. */
 /* Stable little-endian bytecode. No structure casts, executable mappings, host
  * addresses or machine-dependent padding are accepted. Size/count is zero on
  * failure; buffers may contain a partial decode and must not then be executed. */

@@ -75,7 +75,10 @@ Inspection itself does not execute instructions. The later comparison extension 
 
 A valid structure can still divide by zero or exceed the signed 32-bit arithmetic range. Inspecting return 1 / 0; succeeds; running it fails. This is deliberate separation of structure and execution. A report is not a security certification or a native machine-code performance estimate.
 
+<!-- Earlier profile wording retained for review:
 The current profile has no branches or loops. A successful run therefore needs instruction_count fuel. A smaller allowance produces fuel exhaustion, and malformed input is rejected even when the budget is zero. If the instruction set gains control flow, budget analysis must be redesigned for that profile.
+-->
+Forward-only branches make instruction_count a sufficient fuel upper bound. A successful path may use fewer instructions because skipped records consume no fuel. Inspection counts both structural arms, not just a selected path. It checks equal stack depth and definite local initialization at joins. Backward edges and unreachable records are rejected; malformed input is still rejected when fuel is zero.
 
 ## Check the behavior
 

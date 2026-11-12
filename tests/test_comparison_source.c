@@ -43,10 +43,20 @@ static const Case cases[] = {
     {"comment-boundary", "2 /* left */ <= /* right */ 2", 1, UMC_OK},
     {"both-operands", "0 == (1 / 0)", 0, UMC_ARITHMETIC_ERROR},
     {"bare-assignment", "1 = 2", 0, UMC_SYNTAX_ERROR},
+    /* Unary ! is supported; the retained prior fixture documents the earlier
+     * grammar. This case now rejects ! where a binary operator is required. */
+#if 0
     {"bare-not", "!1", 0, UMC_SYNTAX_ERROR},
+#endif
+    {"bare-not", "1 ! 1", 0, UMC_SYNTAX_ERROR},
     {"spaced-operator", "1 < = 2", 0, UMC_SYNTAX_ERROR},
     {"missing-right", "1 <=", 0, UMC_SYNTAX_ERROR},
-    {"logical-and", "1 && 2", 0, UMC_SYNTAX_ERROR}};
+    /* Keep the named refusal case for a split token; the paired operator
+     * is covered by the short-circuit source tests. */
+#if 0
+    {"logical-and", "1 && 2", 0, UMC_SYNTAX_ERROR}
+#endif
+    {"logical-and", "1 & & 2", 0, UMC_SYNTAX_ERROR}};
 int main(int argc, char **argv) {
   if (argc != 2)
     return 2;

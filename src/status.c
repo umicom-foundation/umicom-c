@@ -13,6 +13,7 @@
  * MIT
  *---------------------------------------------------------------------------*/
 #include "internal.h"
+#include "umicom_c/profile.h"
 
 const char *umc_status_text(UmcStatus status)
 {
@@ -29,6 +30,7 @@ const char *umc_status_text(UmcStatus status)
     case UMC_FUEL_EXHAUSTED: return "instruction budget exhausted";
     case UMC_ARITHMETIC_ERROR: return "division by zero or signed arithmetic overflow";
     case UMC_BUFFER_TOO_SMALL: return "output buffer is too small";
+    case UMC_LOCAL_CAPACITY: return "local variable capacity exceeded";
     default: return "unknown status";
     }
 }
@@ -49,6 +51,10 @@ const char *umc_opcode_text(UmcOpcode opcode)
     case UMC_GREATER_EQUAL: return "greater-equal";
     case UMC_EQUAL: return "equal";
     case UMC_NOT_EQUAL: return "not-equal";
+    case UMC_LOAD_LOCAL: return "load-local";
+    case UMC_STORE_LOCAL: return "store-local";
+    case UMC_JUMP: return "jump";
+    case UMC_JUMP_IF_ZERO: return "jump-if-zero";
     default: return "invalid";
     }
 }
@@ -92,4 +98,63 @@ void umc_locate_diagnostic(const char *source, size_t length, UmcDiagnostic *dia
     }
     diagnostic->line = line;
     diagnostic->column = column;
+}
+
+
+/* Keep runtime discovery in an object already shared by hosted and freestanding
+ * consumers. Return values come from this library's compilation, rather than
+ * from constants expanded in a separately built caller. */
+/* Report local slots and the canonical local bytecode profile from the linked runtime. The predecessor remains disabled for review. */
+#if 0
+uint32_t umc_runtime_profile(UmcProfileProperty property)
+{
+    switch (property) {
+    case UMC_PROFILE_API: return UMC_API_VERSION;
+    case UMC_PROFILE_FEATURES:
+        return UMC_FEATURE_ARITHMETIC | UMC_FEATURE_COMPARISON |
+            UMC_FEATURE_EXECUTION_TRACE | UMC_FEATURE_PROGRAM_INSPECTION;
+    case UMC_PROFILE_PROGRAM_INSTRUCTIONS: return UMC_PROGRAM_LIMIT;
+    case UMC_PROFILE_STACK_VALUES: return UMC_STACK_LIMIT;
+    case UMC_PROFILE_BYTECODE_BYTES: return UMC_BYTECODE_LIMIT;
+    case UMC_PROFILE_WIRE_VERSIONS: return (UINT32_C(1) << 1U) | (UINT32_C(1) << 2U);
+    default: return 0U;
+    }
+}
+
+#endif
+
+/* Report runtime graph support independently from source spelling features. The predecessor remains disabled for review. */
+#if 0
+uint32_t umc_runtime_profile(UmcProfileProperty property)
+{
+    switch (property) {
+    case UMC_PROFILE_API: return UMC_API_VERSION;
+    case UMC_PROFILE_FEATURES:
+        return UMC_FEATURE_ARITHMETIC | UMC_FEATURE_COMPARISON |
+            UMC_FEATURE_EXECUTION_TRACE | UMC_FEATURE_PROGRAM_INSPECTION | UMC_FEATURE_LOCAL_INTEGERS;
+    case UMC_PROFILE_PROGRAM_INSTRUCTIONS: return UMC_PROGRAM_LIMIT;
+    case UMC_PROFILE_STACK_VALUES: return UMC_STACK_LIMIT;
+    case UMC_PROFILE_BYTECODE_BYTES: return UMC_BYTECODE_LIMIT;
+    case UMC_PROFILE_WIRE_VERSIONS: return (UINT32_C(1) << 1U) | (UINT32_C(1) << 2U) | (UINT32_C(1) << 3U);
+    case UMC_PROFILE_LOCAL_VALUES: return UMC_LOCAL_LIMIT;
+    default: return 0U;
+    }
+}
+
+#endif
+
+uint32_t umc_runtime_profile(UmcProfileProperty property)
+{
+    switch (property) {
+    case UMC_PROFILE_API: return UMC_API_VERSION;
+    case UMC_PROFILE_FEATURES:
+        return UMC_FEATURE_ARITHMETIC | UMC_FEATURE_COMPARISON |
+            UMC_FEATURE_EXECUTION_TRACE | UMC_FEATURE_PROGRAM_INSPECTION | UMC_FEATURE_LOCAL_INTEGERS | UMC_FEATURE_FORWARD_BRANCHES;
+    case UMC_PROFILE_PROGRAM_INSTRUCTIONS: return UMC_PROGRAM_LIMIT;
+    case UMC_PROFILE_STACK_VALUES: return UMC_STACK_LIMIT;
+    case UMC_PROFILE_BYTECODE_BYTES: return UMC_BYTECODE_LIMIT;
+    case UMC_PROFILE_WIRE_VERSIONS: return (UINT32_C(1) << 1U) | (UINT32_C(1) << 2U) | (UINT32_C(1) << 3U) | (UINT32_C(1) << 4U);
+    case UMC_PROFILE_LOCAL_VALUES: return UMC_LOCAL_LIMIT;
+    default: return 0U;
+    }
 }
