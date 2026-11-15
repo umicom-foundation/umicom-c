@@ -51,6 +51,18 @@ typedef enum UmcProfileProperty {
 #define UMC_FEATURE_LOGICAL_CONNECTIVES UINT32_C(512)
 /* Conditional values lower to the existing forward branch runtime. */
 #define UMC_FEATURE_CONDITIONAL_EXPRESSIONS UINT32_C(1024)
+/* Local += -= *= /= statements reuse load, arithmetic and store records. */
+#define UMC_FEATURE_COMPOUND_ASSIGNMENTS UINT32_C(2048)
+/* Braced if/else updates reuse existing checked forward-branch records. */
+#define UMC_FEATURE_IF_STATEMENTS UINT32_C(4096)
+/* Else-if source chains reuse format 4 without a runtime operation change. */
+#define UMC_FEATURE_ELSE_IF_CHAINS UINT32_C(8192)
+/* Binary remainder and %= share this compiler/runtime arithmetic capability. */
+#define UMC_FEATURE_REMAINDER UINT32_C(16384)
+/* Signed unary complement lowers to existing arithmetic; compiler only. */
+#define UMC_FEATURE_BITWISE_COMPLEMENT UINT32_C(32768)
+/* Eager binary bitwise source and runtime support requires wire format 6. */
+#define UMC_FEATURE_BINARY_BITWISE UINT32_C(65536)
 
 /* Runtime reports arithmetic/comparison, trace and inspection, program/stack/
  * bytecode limits, and supported wire-version bits (1U << version).

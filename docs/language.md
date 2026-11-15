@@ -1,3 +1,5 @@
+![Umicom](assets/branding/umicom-logo.svg)
+
 # Umicom C integer expression language
 
 <!-- The original arithmetic-only title is retained for language-profile history: # Umicom C arithmetic language -->
@@ -21,7 +23,7 @@ The result is 14. Multiplication is evaluated before addition. Parentheses chang
 <!-- Earlier profile wording retained for review:
 The compiler requires these words exactly. `main()`, additional functions, declarations, variables, loops, calls, includes, strings and floating-point values are not accepted.
 -->
-The compiler requires these entry-function words exactly. It also accepts initialized `int` locals and assignments before the final return. `main()`, additional functions, nested blocks, loops, calls, includes, strings and floating-point values are not accepted.
+The compiler requires these entry-function words exactly. It also accepts initialized `int` locals, assignments and braced conditional statements before the final return. `main()`, additional functions, standalone nested blocks, loops, calls, includes, strings and floating-point values are not accepted.
 
 <!-- Earlier program production retained for review: program = "int" "main" "(" "void" ")" "{" "return" expression ";" "}" end -->
 
@@ -31,17 +33,30 @@ The compiler requires these entry-function words exactly. It also accepts initia
 
 The grammar below is a compact way to describe the accepted shapes. A quoted item is literal source text. A vertical bar means "choose one". An asterisk means "repeat zero or more times". A trailing question mark outside quoted text means "optional".
 
+<!-- The earlier assignment production accepted only identifier = expression; it remains supported by the expanded assignment-operator rule below. -->
+
+<!-- Earlier production retained for language history: assignment-operator = "=" | "+=" | "-=" | "*=" | "/=" | "%=" -->
+
+<!-- Earlier production retained for language history: logical-and = equality ("&&" equality)* -->
+
 ```text
 program    = "int" "main" "(" "void" ")" "{" statement* "return" expression ";" "}" end
-statement  = "int" identifier "=" expression ";" | identifier "=" expression ";"
+statement  = "int" identifier "=" expression ";" | update | conditional-statement
+update     = identifier assignment-operator expression ";"
+conditional-statement = "if" "(" expression ")" body ("else" (body | conditional-statement))?
+body       = "{" (update | conditional-statement)* "}"
+assignment-operator = "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "^=" | "|="
 expression = logical-or ("?" expression ":" expression)?
 logical-or = logical-and ("||" logical-and)*
-logical-and = equality ("&&" equality)*
+logical-and = bitwise-or ("&&" bitwise-or)*
+bitwise-or = bitwise-xor ("|" bitwise-xor)*
+bitwise-xor = bitwise-and ("^" bitwise-and)*
+bitwise-and = equality ("&" equality)*
 equality   = relational (("==" | "!=") relational)*
 relational = additive (("<" | "<=" | ">" | ">=") additive)*
 additive   = product (("+" | "-") product)*
-product    = unary (("*" | "/") unary)*
-unary      = ("+" | "-" | "!") unary | integer | identifier | "(" expression ")"
+product    = unary (("*" | "/" | "%") unary)*
+unary      = ("+" | "-" | "!" | "~") unary | integer | identifier | "(" expression ")"
 integer    = decimal | ("0x" | "0X") hex-digit+ | ("0b" | "0B") binary-digit+
 decimal    = decimal digit followed by zero or more decimal digits
 ```
@@ -66,11 +81,13 @@ Assignment is a statement, not an expression. `&&`, `||`, conditionals and branc
 <!-- Earlier profile wording retained for review:
 Assignment is a statement, not an expression. `&&` and `||` have short-circuit semantics below equality precedence. Conditional statements, conditional expressions and loops remain unsupported.
 -->
-Assignment is a statement, not an expression. `&&` and `||` have short-circuit semantics below equality precedence. The integer conditional expression `condition ? true_value : false_value` binds below logical OR. Conditional statements and loops remain unsupported.
+Assignment is a statement, not an expression. `&&` and `||` have short-circuit semantics below equality precedence. The integer conditional expression `condition ? true_value : false_value` binds below logical OR. Braced conditional statements are supported as described below. Loops remain unsupported.
 
 <!-- Earlier grammar restriction retained for review: Assignment, unary `!`, `&&`, `||`, conditionals and branches remain unsupported. -->
 
 Both operands execute before the comparison. `0 == (1 / 0)` fails at division; equality does not suppress a failing operand. Comparison itself does not subtract the operands, so comparing the minimum and maximum signed values does not overflow. One comparison consumes one instruction of the execution budget, like one addition.
+
+<!-- Before checked remainder, assignment-operator ended at "/=" and product accepted only "*" or "/". Those productions remain subsets of the current grammar. -->
 
 ## Numbers and failure
 
@@ -117,7 +134,7 @@ Negation does not suppress errors: `!(1 / 0)` fails while evaluating division. E
 
 A local names an integer stored during this execution. Declare it with `int count = 6;`, assign a new value with `count = count * 7;`, and read it with `return count;`. The initializer may read earlier declarations. The new name becomes visible only after its initializer has compiled. Self-reference, forward reference, duplicate declarations and reads of undeclared names are errors.
 
-Names contain ASCII letters, digits and underscore, begin with a letter or underscore, are case sensitive and have at most 63 bytes. The keywords `int`, `main`, `void` and `return` remain reserved. There are at most 32 locals per program. Their storage belongs to one execution; it does not survive a later call. Every declaration requires an initializer. There is one flat scope and no comma declaration, address operator, pointer, array or increment operation.
+Names contain ASCII letters, digits and underscore, begin with a letter or underscore, are case sensitive and have at most 63 bytes. The keywords `int`, `main`, `void`, `return`, `if` and `else` are reserved. There are at most 32 locals per program. Their storage belongs to one execution; it does not survive a later call. Every declaration requires an initializer. There is one flat scope and no comma declaration, address operator, pointer, array or increment operation.
 
 Read [the local integer walkthrough](local-integers.md) for lowering, slot validation, tracing and recovery.
 
@@ -131,4 +148,35 @@ The compiler emits forward-only branch instructions and selects canonical format
 
 `condition ? when_true : when_false` evaluates the condition once, then evaluates only one arm. Nonzero selects the first arm; zero selects the second. The selected integer is preserved, so `1 ? -9 : 42` returns -9 rather than 1. Both arms must still parse and pass structural admission. Nesting associates to the right: `a ? b : c ? d : e` means `a ? b : (c ? d : e)`.
 
-Every recursive arm consumes the same parse-depth allowance used by parentheses and unary operators. The compiler uses existing JUMP_IF_ZERO and JUMP operations; format 4 and the runtime feature mask do not change. No comma expressions, assignment expressions, omitted middle operand, pointer conversions or if statements are added. See [conditional values](conditional-values.md) for commands, limits and recovery.
+Every recursive arm consumes the same parse-depth allowance used by parentheses and unary operators. The compiler uses existing JUMP_IF_ZERO and JUMP operations; format 4 and the runtime feature mask do not change. No comma expressions, assignment expressions, omitted middle operand, pointer conversions or if statements are added by this expression extension; the separate statement extension is described below. See [conditional values](conditional-values.md) for commands, limits and recovery.
+
+## Compound assignment statements
+
+An initialized local can be updated with `value += expression;`, `-=`, `*=` or `/=`. The two operator characters must be adjacent. The compiler loads the old value once, evaluates the right expression once, applies existing checked arithmetic and stores the result. The update is a statement only: `int x += 1;`, `return x += 1;` and chained assignments are rejected. Arithmetic errors preserve the caller's completed-result storage; no partial assignment result is exposed. This is compiler capability bit 2048 and adds no runtime opcode or wire version. See [compound assignments](compound-assignments.md) for the source, trace and bytecode walkthrough.
+
+## Conditional update statements
+
+Use **if (expression) { updates }** with an optional **else { updates }**. Zero chooses the false path; any nonzero integer chooses the true path. Each body contains assignments or nested braced if statements, with no new declarations or early returns. The condition executes once. Both arms must compile, even when one is skipped. Braces are mandatory around update bodies. Else-if chains are accepted as successive false-path conditions; standalone scopes remain outside the grammar. Each additional if consumes the shared parse-depth allowance.
+
+All body names must already be initialized in the flat outer scope. Nested statements and their expressions share the 64-level parse bound. The existing forward-only runtime checks stack joins and local initialization; canonical wire format 4 is reused without new opcode identities. Source capability bit 4096 identifies the linked compiler support. Read [conditional updates](if-statements.md) for exact instruction paths and failure cases.
+
+<!-- The prior conditional production required an else body: conditional-statement = "if" "(" expression ")" body ("else" body)?. It is retained here for grammar review; the active production also accepts a conditional statement after else. -->
+
+Read [ordered else-if chains](else-if-chains.md) for selection, fuel and diagnostic examples.
+
+## Checked signed remainder
+
+The binary operator **%** binds alongside multiplication and division, grouping from the left. Thus 20 % 6 * 3 is (20 % 6) * 3, giving six. A nonzero remainder has the sign of the left operand: -7 % 3 is -1 and 7 % -3 is 1. Zero divisors and the minimum signed value paired with -1 fail before the host remainder operation. The compound statement **value %= expression;** updates one initialized local and evaluates its old value and right expression once. Assignment expressions remain unsupported.
+
+Remainder uses opcode 18 and canonical format 5, even when branches appear earlier in the program. Programs without remainder retain their existing minimal formats and bytes. Read [checked remainder](remainder.md) for the exact fixture, capability checks, failure-preserving execution and consumer qualification.
+
+<!-- Prior unary production retained for review: unary      = ("+" | "-" | "!") unary | integer | identifier | "(" expression ")" -->
+
+## Signed bitwise complement
+
+Unary **~** flips the signed 32-bit representation. ~0 is -1, ~-1 is zero, and ~(-2147483647-1) is 2147483647. It binds beside unary plus, minus and logical not. The compiler lowers it to PUSH -1, one evaluation of its operand and SUBTRACT, preserving endpoint behavior. Each complement adds two instructions. <!-- Earlier scope retained: Binary bitwise operators, shifts and ~= remain unsupported. -->
+Binary &, ^ and | are supported as described below. Shifts and ~= remain unsupported. See [the complement walkthrough](complement.md) for exact fuel, source spans and unchanged wire profiles.
+
+## Binary bitwise operators
+
+Binary &, ^ and | operate eagerly on the signed 32-bit representation. Equality binds more tightly than &, then ^, then |; logical && and || bind more loosely. Initialized locals also accept &=, ^= and |= as statements. The source and runtime advertise UMC_FEATURE_BINARY_BITWISE; emitted bitwise operations require wire format 6. See [binary bitwise operators](bitwise.md) for grouping, signed endpoints, exact fuel and independent consumer checks.

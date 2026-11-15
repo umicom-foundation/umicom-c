@@ -322,6 +322,8 @@ static int merge_state(uint8_t *depths, uint32_t *initialized, size_t target,
     initialized[target] &= local_bits;
     return 1;
 }
+/* Admit remainder as a two-input arithmetic operation in the same complete forward-graph analysis. The previous implementation is retained for engineering review. */
+#if 0
 static UmcStatus inspect_program(const UmcInstruction *program, size_t count,
     UmcProgramInfo *info, UmcDiagnostic *diagnostic)
 {
@@ -373,6 +375,105 @@ static UmcStatus inspect_program(const UmcInstruction *program, size_t count,
             --depth;
             ++arithmetic;
             break;
+        case UMC_LESS: case UMC_LESS_EQUAL: case UMC_GREATER:
+        case UMC_GREATER_EQUAL: case UMC_EQUAL: case UMC_NOT_EQUAL:
+            if (depth < 2U) return umc_fail(diagnostic, UMC_BAD_BYTECODE, offset);
+            --depth;
+            /* Comparisons and branches are not arithmetic_count entries. */
+            break;
+        case UMC_NEGATE:
+            if (depth == 0U) return umc_fail(diagnostic, UMC_BAD_BYTECODE, offset);
+            ++arithmetic;
+            break;
+        case UMC_JUMP_IF_ZERO:
+            if (depth == 0U) return umc_fail(diagnostic, UMC_BAD_BYTECODE, offset);
+            --depth;
+            break;
+        case UMC_JUMP:
+            break;
+        case UMC_RETURN:
+            if (depth != 1U || i + 1U != count)
+                return umc_fail(diagnostic, UMC_BAD_BYTECODE, offset);
+            break;
+        default:
+            return umc_fail(diagnostic, UMC_BAD_BYTECODE, offset);
+        }
+        if (depth > peak) peak = depth;
+        if (branch && !merge_state(depths, local_states, (size_t)instruction->operand, depth, initialized))
+            return umc_fail(diagnostic, UMC_BAD_BYTECODE, offset);
+        if (instruction->opcode != UMC_JUMP && instruction->opcode != UMC_RETURN) {
+            if (i + 1U == count || !merge_state(depths, local_states, i + 1U, depth, initialized))
+                return umc_fail(diagnostic, UMC_BAD_BYTECODE, offset);
+        }
+    }
+    if (program[count - 1U].opcode != UMC_RETURN)
+        return umc_fail(diagnostic, UMC_BAD_BYTECODE, program[count - 1U].source_offset);
+    /* Structural counts include both alternatives. Forward edges ensure no
+     * execution visits more than count records; counts are not a path trace. */
+    if (info != NULL) {
+        info->instruction_count = count;
+        info->peak_stack = peak;
+        info->constant_count = constants;
+        info->arithmetic_count = arithmetic;
+        info->bytecode_size = UMC_BYTECODE_HEADER_SIZE + count * UMC_BYTECODE_RECORD_SIZE;
+    }
+    return UMC_OK;
+}
+#endif
+static UmcStatus inspect_program(const UmcInstruction *program, size_t count,
+    UmcProgramInfo *info, UmcDiagnostic *diagnostic)
+{
+    (void)umc_fail(diagnostic, UMC_OK, 0U);
+    if (program == NULL || count == 0U || count > UMC_PROGRAM_LIMIT)
+        return umc_fail(diagnostic, UMC_BAD_BYTECODE, 0U);
+    uint8_t depths[UMC_PROGRAM_LIMIT];
+    uint32_t local_states[UMC_PROGRAM_LIMIT];
+    for (size_t i = 0U; i < count; ++i) {
+        depths[i] = UINT8_MAX;
+        local_states[i] = 0U;
+    }
+    depths[0] = 0U;
+    size_t peak = 0U, constants = 0U, arithmetic = 0U;
+    for (size_t i = 0U; i < count; ++i) {
+        const UmcInstruction *instruction = &program[i];
+        const size_t offset = instruction->source_offset;
+        const bool local = instruction->opcode == UMC_LOAD_LOCAL || instruction->opcode == UMC_STORE_LOCAL;
+        const bool branch = instruction->opcode == UMC_JUMP || instruction->opcode == UMC_JUMP_IF_ZERO;
+        if (offset > UMC_SOURCE_LIMIT || depths[i] == UINT8_MAX ||
+            (instruction->opcode != UMC_PUSH && !local && !branch && instruction->operand != 0))
+            return umc_fail(diagnostic, UMC_BAD_BYTECODE, offset);
+        if (local && (instruction->operand < 0 || (uint32_t)instruction->operand >= UMC_LOCAL_LIMIT))
+            return umc_fail(diagnostic, UMC_BAD_BYTECODE, offset);
+        if (branch && (instruction->operand < 0 || (size_t)instruction->operand <= i ||
+            (size_t)instruction->operand >= count))
+            return umc_fail(diagnostic, UMC_BAD_BYTECODE, offset);
+        size_t depth = depths[i];
+        uint32_t initialized = local_states[i];
+        switch (instruction->opcode) {
+        case UMC_LOAD_LOCAL:
+            if (!(initialized & (UINT32_C(1) << (uint32_t)instruction->operand)))
+                return umc_fail(diagnostic, UMC_BAD_BYTECODE, offset);
+            if (depth == UMC_STACK_LIMIT) return umc_fail(diagnostic, UMC_STACK_OVERFLOW, offset);
+            ++depth;
+            break;
+        case UMC_STORE_LOCAL:
+            if (depth == 0U) return umc_fail(diagnostic, UMC_BAD_BYTECODE, offset);
+            --depth;
+            initialized |= UINT32_C(1) << (uint32_t)instruction->operand;
+            break;
+        case UMC_PUSH:
+            if (depth == UMC_STACK_LIMIT) return umc_fail(diagnostic, UMC_STACK_OVERFLOW, offset);
+            ++depth;
+            ++constants;
+            break;
+        case UMC_ADD: case UMC_SUBTRACT: case UMC_MULTIPLY: case UMC_DIVIDE: case UMC_REMAINDER:
+            if (depth < 2U) return umc_fail(diagnostic, UMC_BAD_BYTECODE, offset);
+            --depth;
+            ++arithmetic;
+            break;
+        /* Eager bitwise operators have the same two-input stack shape but
+         * are not counted as arithmetic operations in the existing report. */
+        case UMC_BITWISE_AND: case UMC_BITWISE_XOR: case UMC_BITWISE_OR:
         case UMC_LESS: case UMC_LESS_EQUAL: case UMC_GREATER:
         case UMC_GREATER_EQUAL: case UMC_EQUAL: case UMC_NOT_EQUAL:
             if (depth < 2U) return umc_fail(diagnostic, UMC_BAD_BYTECODE, offset);
@@ -700,6 +801,8 @@ static UmcStatus execute_validated(const UmcInstruction *program, size_t count,
 
 #endif
 
+/* Use one checked remainder operation across hosted, traced and freestanding consumers. The previous implementation is retained for engineering review. */
+#if 0
 static UmcStatus execute_validated(const UmcInstruction *program, size_t count,
     size_t fuel, UmcResult *result, UmcTraceStep *steps, size_t *trace_count,
     UmcDiagnostic *diagnostic)
@@ -741,6 +844,103 @@ static UmcStatus execute_validated(const UmcInstruction *program, size_t count,
             case UMC_ADD: value = (int64_t)left + (int64_t)right; break;
             case UMC_SUBTRACT: value = (int64_t)left - (int64_t)right; break;
             case UMC_MULTIPLY: value = (int64_t)left * (int64_t)right; break;
+            case UMC_DIVIDE:
+                if (right == 0 || (left == INT32_MIN && right == -1))
+                    status = UMC_ARITHMETIC_ERROR;
+                else value = left / right;
+                break;
+            /* Native signed comparisons are defined across the whole int32
+             * range. No subtraction is used to compare extreme values. */
+            case UMC_LESS: value = left < right ? 1 : 0; break;
+            case UMC_LESS_EQUAL: value = left <= right ? 1 : 0; break;
+            case UMC_GREATER: value = left > right ? 1 : 0; break;
+            case UMC_GREATER_EQUAL: value = left >= right ? 1 : 0; break;
+            case UMC_EQUAL: value = left == right ? 1 : 0; break;
+            case UMC_NOT_EQUAL: value = left != right ? 1 : 0; break;
+            default: status = UMC_BAD_BYTECODE; break;
+            }
+            /* Widen first, check the range, then publish both value and depth.
+             * Even INT32_MIN squared fits int64_t; signed overflow is never used
+             * as an error detector. Every stack read follows shape validation. */
+            if (status == UMC_OK && (value < INT32_MIN || value > INT32_MAX))
+                status = UMC_ARITHMETIC_ERROR;
+            if (status == UMC_OK) {
+                --depth;
+                stack[depth - 1U] = (int32_t)value;
+            }
+        }
+        record_step(steps, trace_count, pc, instruction, stack, depth, status);
+        if (status != UMC_OK)
+            return umc_fail(diagnostic, status, instruction->source_offset);
+        pc = next;
+    }
+    return umc_fail(diagnostic, UMC_BAD_BYTECODE, 0U);
+}
+#endif
+/* Convert signed inputs to their defined modulo-2^32 representations and
+ * map the result back through int64 arithmetic. No out-of-range unsigned to
+ * signed cast, signed shift or overflowing host operation is required. */
+static int64_t bitwise_value(UmcOpcode opcode, int32_t left, int32_t right)
+{
+    const uint32_t a = (uint32_t)left, b = (uint32_t)right;
+    const uint32_t bits = opcode == UMC_BITWISE_AND ? a & b :
+        opcode == UMC_BITWISE_XOR ? a ^ b : a | b;
+    return bits <= (uint32_t)INT32_MAX ? (int64_t)bits :
+        (int64_t)bits - INT64_C(4294967296);
+}
+
+static UmcStatus execute_validated(const UmcInstruction *program, size_t count,
+    size_t fuel, UmcResult *result, UmcTraceStep *steps, size_t *trace_count,
+    UmcDiagnostic *diagnostic)
+{
+    int32_t stack[UMC_STACK_LIMIT];
+    /* Complete validation proves each read follows a write. This automatic
+     * frame belongs to one execution and exposes no address or persistent state. */
+    int32_t locals[UMC_LOCAL_LIMIT];
+    size_t depth = 0U;
+    for (size_t pc = 0U, executed = 0U; pc < count; ++executed) {
+        size_t next = pc + 1U;
+        const UmcInstruction *instruction = &program[pc];
+        UmcStatus status = UMC_OK;
+        if (executed >= fuel) {
+            status = UMC_FUEL_EXHAUSTED;
+        } else if (instruction->opcode == UMC_PUSH) {
+            stack[depth++] = instruction->operand;
+        } else if (instruction->opcode == UMC_LOAD_LOCAL) {
+            stack[depth++] = locals[(size_t)instruction->operand];
+        } else if (instruction->opcode == UMC_STORE_LOCAL) {
+            locals[(size_t)instruction->operand] = stack[--depth];
+        } else if (instruction->opcode == UMC_JUMP) {
+            next = (size_t)instruction->operand;
+        } else if (instruction->opcode == UMC_JUMP_IF_ZERO) {
+            if (stack[--depth] == 0) next = (size_t)instruction->operand;
+        } else if (instruction->opcode == UMC_RETURN) {
+            record_step(steps, trace_count, pc, instruction, stack, depth, UMC_OK);
+            result->value = stack[0];
+            result->instructions_executed = executed + 1U;
+            return UMC_OK;
+        } else if (instruction->opcode == UMC_NEGATE) {
+            if (stack[depth - 1U] == INT32_MIN) status = UMC_ARITHMETIC_ERROR;
+            else stack[depth - 1U] = -stack[depth - 1U];
+        } else {
+            const int32_t right = stack[depth - 1U];
+            const int32_t left = stack[depth - 2U];
+            int64_t value = 0;
+            switch (instruction->opcode) {
+            case UMC_ADD: value = (int64_t)left + (int64_t)right; break;
+            case UMC_SUBTRACT: value = (int64_t)left - (int64_t)right; break;
+            case UMC_MULTIPLY: value = (int64_t)left * (int64_t)right; break;
+            case UMC_BITWISE_AND: case UMC_BITWISE_XOR: case UMC_BITWISE_OR:
+                value = bitwise_value(instruction->opcode, left, right);
+                break;
+            case UMC_REMAINDER:
+                /* C remainder is undefined for zero and the minimum/-1 pair.
+                 * Reject both before executing host arithmetic; failure leaves
+                 * operand depth and caller result unchanged. */
+                if (right == 0 || (left == INT32_MIN && right == -1))
+                    status = UMC_ARITHMETIC_ERROR;
+                else value = left % right;
+                break;
             case UMC_DIVIDE:
                 if (right == 0 || (left == INT32_MIN && right == -1))
                     status = UMC_ARITHMETIC_ERROR;

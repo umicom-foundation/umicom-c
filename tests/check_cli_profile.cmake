@@ -35,7 +35,32 @@ endif()
 if(FALSE)
 set(expected "profile.schema=1\ncompiler.api=1\ncompiler.features=743\ncompiler.source-bytes=65536\ncompiler.instructions=256\ncompiler.parse-depth=64\nruntime.api=1\nruntime.features=411\nruntime.instructions=256\nruntime.stack-values=64\nruntime.bytecode-bytes=2312\nruntime.wire-versions=30\ncompiler.local-values=32\ncompiler.identifier-bytes=63\nruntime.local-values=32\n")
 endif()
+# Preserve the pre-compound compiler report; runtime and wire masks stay fixed.
+if(FALSE)
 set(expected "profile.schema=1\ncompiler.api=1\ncompiler.features=1767\ncompiler.source-bytes=65536\ncompiler.instructions=256\ncompiler.parse-depth=64\nruntime.api=1\nruntime.features=411\nruntime.instructions=256\nruntime.stack-values=64\nruntime.bytecode-bytes=2312\nruntime.wire-versions=30\ncompiler.local-values=32\ncompiler.identifier-bytes=63\nruntime.local-values=32\n")
+endif()
+# Preserve the pre-conditional-statement profile for review. The new compiler
+# bit advertises source lowering; runtime and wire capabilities are unchanged.
+if(FALSE)
+    set(expected "profile.schema=1\ncompiler.api=1\ncompiler.features=3815\ncompiler.source-bytes=65536\ncompiler.instructions=256\ncompiler.parse-depth=64\nruntime.api=1\nruntime.features=411\nruntime.instructions=256\nruntime.stack-values=64\nruntime.bytecode-bytes=2312\nruntime.wire-versions=30\ncompiler.local-values=32\ncompiler.identifier-bytes=63\nruntime.local-values=32\n")
+endif()
+# Else-if adds compiler bit 8192; retain the former exact report for review.
+if(FALSE)
+set(expected "profile.schema=1\ncompiler.api=1\ncompiler.features=7911\ncompiler.source-bytes=65536\ncompiler.instructions=256\ncompiler.parse-depth=64\nruntime.api=1\nruntime.features=411\nruntime.instructions=256\nruntime.stack-values=64\nruntime.bytecode-bytes=2312\nruntime.wire-versions=30\ncompiler.local-values=32\ncompiler.identifier-bytes=63\nruntime.local-values=32\n")
+endif()
+# Preserve the prior exact capability report; remainder adds shared bit 16384 and wire format 5.
+if(FALSE)
+set(expected "profile.schema=1\ncompiler.api=1\ncompiler.features=16103\ncompiler.source-bytes=65536\ncompiler.instructions=256\ncompiler.parse-depth=64\nruntime.api=1\nruntime.features=411\nruntime.instructions=256\nruntime.stack-values=64\nruntime.bytecode-bytes=2312\nruntime.wire-versions=30\ncompiler.local-values=32\ncompiler.identifier-bytes=63\nruntime.local-values=32\n")
+endif()
+# Preserve the prior report; complement adds compiler-only bit 32768.
+if(FALSE)
+set(expected "profile.schema=1\ncompiler.api=1\ncompiler.features=32487\ncompiler.source-bytes=65536\ncompiler.instructions=256\ncompiler.parse-depth=64\nruntime.api=1\nruntime.features=16795\nruntime.instructions=256\nruntime.stack-values=64\nruntime.bytecode-bytes=2312\nruntime.wire-versions=62\ncompiler.local-values=32\ncompiler.identifier-bytes=63\nruntime.local-values=32\n")
+endif()
+# Preserve the format-5 complement capability response for review.
+if(FALSE)
+set(expected "profile.schema=1\ncompiler.api=1\ncompiler.features=65255\ncompiler.source-bytes=65536\ncompiler.instructions=256\ncompiler.parse-depth=64\nruntime.api=1\nruntime.features=16795\nruntime.instructions=256\nruntime.stack-values=64\nruntime.bytecode-bytes=2312\nruntime.wire-versions=62\ncompiler.local-values=32\ncompiler.identifier-bytes=63\nruntime.local-values=32\n")
+endif()
+set(expected "profile.schema=1\ncompiler.api=1\ncompiler.features=130791\ncompiler.source-bytes=65536\ncompiler.instructions=256\ncompiler.parse-depth=64\nruntime.api=1\nruntime.features=82331\nruntime.instructions=256\nruntime.stack-values=64\nruntime.bytecode-bytes=2312\nruntime.wire-versions=126\ncompiler.local-values=32\ncompiler.identifier-bytes=63\nruntime.local-values=32\n")
 if(NOT "${code}" STREQUAL "0" OR NOT output STREQUAL expected OR NOT error STREQUAL "")
     message(FATAL_ERROR "Profile output contract failed: ${code}\n${output}\n${error}")
 endif()

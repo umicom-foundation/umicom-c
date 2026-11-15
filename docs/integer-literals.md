@@ -25,7 +25,13 @@ Do not point a cache at a second source checkout. The profile reports compiler.f
 64 for binary literals. The runtime mask remains 27. These are declarations of the
 linked implementation, not an authenticated identity or a complete C23 claim.
 -->
-Do not point a cache at a second source checkout. Check the hexadecimal and binary feature bits (32 and 64) rather than assuming the entire compiler mask is fixed. The current local, logical and conditional implementation reports compiler.features=1767 and runtime.features=411; see [capability profiles](capability-profiles.md). Literal spelling itself adds no runtime opcode. These declarations identify supported behavior, not authenticated binary identity or complete C23 compatibility.
+<!-- Earlier profile statement retained for review:
+Do not point a cache at a second source checkout. Check the hexadecimal and binary feature bits (32 and 64) rather than assuming the entire compiler mask is fixed. The current local, logical, conditional-expression, compound-assignment and conditional-statement implementation reports compiler.features=16103 and runtime.features=411; see [capability profiles](capability-profiles.md). Literal spelling itself adds no runtime opcode. These declarations identify supported behavior, not authenticated binary identity or complete C23 compatibility.
+-->
+<!-- Earlier capability snapshot retained for review: Do not point a cache at a second source checkout. Check the hexadecimal and binary feature bits (32 and 64) rather than assuming the entire compiler mask is fixed. The current local, logical, conditional-expression, compound-assignment and conditional-statement implementation reports compiler.features=65255 and runtime.features=16795; see [capability profiles](capability-profiles.md). Literal spelling itself adds no runtime opcode. These declarations identify supported behavior, not authenticated binary identity or complete C23 compatibility. -->
+Do not point a cache at a second source checkout. Check the hexadecimal and binary feature bits (32 and 64) rather than assuming the entire compiler mask is fixed. The current local, logical, conditional-expression, compound-assignment and conditional-statement implementation reports compiler.features=130791 and runtime.features=82331; see [capability profiles](capability-profiles.md). Literal spelling itself adds no runtime opcode. These declarations identify supported behavior, not authenticated binary identity or complete C23 compatibility.
+
+These complete masks include the separate [checked remainder](remainder.md) extension. Remainder adds opcode 18 and format 5; the example in this guide retains its existing execution and minimal wire format.
 
 ## Compare two spellings
 
@@ -109,3 +115,7 @@ compiler string-initialization warnings without disabling them.
 Passing these checks establishes the exercised profile on the selected build.
 It does not qualify a Kernel target, an editor integration, all C syntax or an
 arbitrary older runtime binary.
+
+<!-- Earlier complete compiler mask statements retained for review before source complement:
+Do not point a cache at a second source checkout. Check the hexadecimal and binary feature bits (32 and 64) rather than assuming the entire compiler mask is fixed. The current local, logical, conditional-expression, compound-assignment and conditional-statement implementation reports compiler.features=32487 and runtime.features=16795; see [capability profiles](capability-profiles.md). Literal spelling itself adds no runtime opcode. These declarations identify supported behavior, not authenticated binary identity or complete C23 compatibility.
+-->

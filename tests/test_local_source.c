@@ -20,6 +20,7 @@ static int values(void)
 {
     static const struct { const char *source; int32_t expected; } cases[] = {
         {"int main(void){int x=6; x=x*7; return x;}",42},
+        {"int main(void){int x=1; x+=1; return x;}",2},
         {"int main(void){int x=0x2a; int y=x==42; return !(!y);}",1},
         {"int main(void){int a=2; int aa=3; int A=5; int _a1=7; return a+aa*A+_a1;}",24},
         {"int main(void){int value=-2147483647-1; return value;}",INT32_MIN},
@@ -43,7 +44,18 @@ static int refusals(void)
         "int main(void){int x=1; int x=2; return x;}", "int main(void){int x; return x;}",
         "int main(void){int x=1,y=2; return x;}", "int main(void){int x=1; return x=2;}",
         "int main(void){int x=1; int y=2; x=y=3; return x;}",
+        /* += is now admitted and exercised in values above and in the
+         * compound-assignment suite. Preserve the old refusal as history;
+         * %= and ++ still test the unsupported update boundary. */
+#if 0
         "int main(void){int x=1; x+=1; return x;}", "int main(void){int x=1; x++; return x;}",
+#endif
+/* Remainder assignment is now accepted; retain the previous refusal and
+ * exercise a separated operator that remains invalid. */
+#if 0
+        "int main(void){int x=1; x%=1; return x;}", "int main(void){int x=1; x++; return x;}",
+#endif
+        "int main(void){int x=1; x% =1; return x;}", "int main(void){int x=1; x++; return x;}",
         "int main(void){{int x=1;} return 0;}", "int main(void){int x[2]=1; return 0;}",
         "int main(void){int *x=0; return 0;}", "int main(void){int x=1; return x; x=2;}",
         "int main(void){int x=1; return X;}", "int main(void){int return=1; return 0;}",

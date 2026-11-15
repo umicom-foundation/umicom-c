@@ -42,7 +42,13 @@ Follow [the build guide](execution-guide.md), then run each command separately f
 .\build\windows-ucrt64-debug\bin\umicom-c.exe trace .\examples\conditional_value.uc --max-steps 8
 ~~~
 
-The current compiler feature mask is 1767, including conditional bit 1024. Runtime features remain 411. The example compiles to 12 records and follows an eight-instruction false path. Expect result seven and trace indices 0, 1, 2, 3, 4, 5, 10 and 11. A budget of seven exhausts at RETURN without publishing a completed result.
+<!-- Earlier profile statement retained for review:
+The current compiler feature mask is 16103, including conditional bit 1024. Runtime features remain 411. The example compiles to 12 records and follows an eight-instruction false path. Expect result seven and trace indices 0, 1, 2, 3, 4, 5, 10 and 11. A budget of seven exhausts at RETURN without publishing a completed result.
+-->
+<!-- Earlier capability snapshot retained for review: The current compiler feature mask is 65255, including conditional bit 1024. Runtime features are 16795. The example compiles to 12 records and follows an eight-instruction false path. Expect result seven and trace indices 0, 1, 2, 3, 4, 5, 10 and 11. A budget of seven exhausts at RETURN without publishing a completed result. -->
+The current compiler feature mask is 130791, including conditional bit 1024. Runtime features are 82331. The example compiles to 12 records and follows an eight-instruction false path. Expect result seven and trace indices 0, 1, 2, 3, 4, 5, 10 and 11. A budget of seven exhausts at RETURN without publishing a completed result.
+
+These complete masks include the separate [checked remainder](remainder.md) extension. Remainder adds opcode 18 and format 5; the example in this guide retains its existing execution and minimal wire format.
 
 ## 3. Understand grouping and values
 
@@ -71,3 +77,7 @@ ctest --test-dir .\build\windows-ucrt64-debug -R "umicom[.]c[.](conditional[.]|c
 The source tests compare fixed values, selected arithmetic faults, syntax refusals and recursion boundaries. An independently enumerated wire fixture checks source offsets and branch targets. The native-C corpus uses the same defined program bodies without sharing VM implementation code.
 
 If a wire fixture differs only in source offsets, enumerate the exact input bytes, including spaces. Do not change the compiler to fit an incorrectly counted fixture. If an old tool rejects ?, select the matching build and check its feature bit. Framework previews and Kernel consumers need their own source/SDK identity evidence; host success alone does not qualify them.
+
+<!-- Earlier complete compiler mask statements retained for review before source complement:
+The current compiler feature mask is 32487, including conditional bit 1024. Runtime features are 16795. The example compiles to 12 records and follows an eight-instruction false path. Expect result seven and trace indices 0, 1, 2, 3, 4, 5, 10 and 11. A budget of seven exhausts at RETURN without publishing a completed result.
+-->

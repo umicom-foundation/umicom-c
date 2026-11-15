@@ -62,7 +62,11 @@ static int faults(void)
 }
 static int refusals(void)
 {
+/* Retain the earlier logical-only refusal list; bitwise now fails here only when an operand is missing. */
+#if 0
     static const char *const invalid[]={"1 & 2","1 | 2","1 & & 2","1 | | 2","1 &&","|| 1","1 &&& 2","1 ||| 2"};
+#endif
+    static const char *const invalid[]={"1 &","1 |","1 & & 2","1 | | 2","1 &&","|| 1","1 &&& 2","1 ||| 2"};
     UmcInstruction code[UMC_PROGRAM_LIMIT]; UmcDiagnostic d; size_t count=99U;
     for(size_t i=0U;i<sizeof invalid/sizeof invalid[0];++i) {
         char source[128]; int n=snprintf(source,sizeof source,"int main(void){return %s;}",invalid[i]);
@@ -73,7 +77,11 @@ static int refusals(void)
     size_t first=(size_t)(strchr(span,'&')-span);
     /* A borrowed span ending after the first byte may not consume the second. */
     CHECK(umc_compile(span,first+1U,code,UMC_PROGRAM_LIMIT,&count,&d)==UMC_SYNTAX_ERROR && count==0U);
+/* The bounded span now contains a valid bitwise operator; the missing operand is diagnosed at the span end, without consuming the next byte. */
+#if 0
     CHECK(d.source_offset==first);
+#endif
+    CHECK(d.source_offset==first+1U);
     CHECK(umc_compile(span,sizeof span-1U,code,3U,&count,&d)==UMC_PROGRAM_TOO_LARGE && count==0U);
     return 0;
 }

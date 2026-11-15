@@ -172,6 +172,10 @@ UmcStatus umc_lex_next(UmcLexer *lexer, UmcToken *token, UmcDiagnostic *diagnost
         else if (matches(word, length, "main")) token->kind = UMC_TOKEN_MAIN;
         else if (matches(word, length, "void")) token->kind = UMC_TOKEN_VOID;
         else if (matches(word, length, "return")) token->kind = UMC_TOKEN_RETURN;
+        /* Reserve complete control-flow words; prefixes such as if_value
+         * remain ordinary identifiers in the existing bounded name grammar. */
+        else if (matches(word, length, "if")) token->kind = UMC_TOKEN_IF;
+        else if (matches(word, length, "else")) token->kind = UMC_TOKEN_ELSE;
         /* Non-keywords now form bounded local identifiers. Keep the former
          * keyword-only refusal for review; the parser still controls every use. */
 #if 0
@@ -186,17 +190,50 @@ UmcStatus umc_lex_next(UmcLexer *lexer, UmcToken *token, UmcDiagnostic *diagnost
         return UMC_OK;
     }
     switch (c) {
+    /* Arithmetic characters now admit an adjacent assignment suffix. Preserve
+     * the single-character predecessor for review; comments and whitespace
+     * cannot join two tokens into a compound assignment. Lookahead never reads
+     * beyond the borrowed source span, including a final arithmetic character. */
+#if 0
     case '+': token->kind = UMC_TOKEN_PLUS; break;
     case '-': token->kind = UMC_TOKEN_MINUS; break;
     case '*': token->kind = UMC_TOKEN_STAR; break;
     case '/': token->kind = UMC_TOKEN_SLASH; break;
+#endif
+    case '+': case '-': case '*': case '/': {
+        const bool paired = lexer->position < lexer->length &&
+            lexer->source[lexer->position] == '=';
+        if (paired) {
+            ++lexer->position;
+            token->length = 2U;
+        }
+        if (c == '+') token->kind = paired ? UMC_TOKEN_ADD_ASSIGN : UMC_TOKEN_PLUS;
+        else if (c == '-') token->kind = paired ? UMC_TOKEN_SUBTRACT_ASSIGN : UMC_TOKEN_MINUS;
+        else if (c == '*') token->kind = paired ? UMC_TOKEN_MULTIPLY_ASSIGN : UMC_TOKEN_STAR;
+        else token->kind = paired ? UMC_TOKEN_DIVIDE_ASSIGN : UMC_TOKEN_SLASH;
+        break;
+    }
     case '(': token->kind = UMC_TOKEN_LEFT; break;
     case ')': token->kind = UMC_TOKEN_RIGHT; break;
     case '{': token->kind = UMC_TOKEN_OPEN; break;
     case '}': token->kind = UMC_TOKEN_CLOSE; break;
     case ';': token->kind = UMC_TOKEN_SEMICOLON; break;
+    /* Remainder uses bounded adjacent lookahead; comments and whitespace
+     * cannot combine % and = into an assignment token. */
+    case '%':
+        if (lexer->position < lexer->length && lexer->source[lexer->position] == '=') {
+            ++lexer->position;
+            token->length = 2U;
+            token->kind = UMC_TOKEN_REMAINDER_ASSIGN;
+        } else token->kind = UMC_TOKEN_REMAINDER;
+        break;
+    /* A standalone unary token needs no lookahead or runtime allocation. */
+    case '~': token->kind = UMC_TOKEN_COMPLEMENT; break;
     case '?': token->kind = UMC_TOKEN_QUESTION; break;
     case ':': token->kind = UMC_TOKEN_COLON; break;
+    /* Preserve the logical-only token branch. The replacement keeps longest
+     * match for &&/|| and admits separate eager operators and assignments. */
+#if 0
     case '&': case '|':
         /* Single characters remain unsupported bitwise operators. Lookahead is
          * bounded by the borrowed span and cannot join tokens across whitespace. */
@@ -206,6 +243,28 @@ UmcStatus umc_lex_next(UmcLexer *lexer, UmcToken *token, UmcDiagnostic *diagnost
         token->length = 2U;
         token->kind = c == '&' ? UMC_TOKEN_AND : UMC_TOKEN_OR;
         break;
+#endif
+    case '&': case '|': case '^': {
+        const char next = lexer->position < lexer->length ?
+            lexer->source[lexer->position] : '\0';
+        if (c != '^' && next == (char)c) {
+            ++lexer->position;
+            token->length = 2U;
+            token->kind = c == '&' ? UMC_TOKEN_AND : UMC_TOKEN_OR;
+        } else {
+            const bool assignment = next == '=';
+            if (assignment) {
+                ++lexer->position;
+                token->length = 2U;
+            }
+            token->kind = c == '&' ?
+                (assignment ? UMC_TOKEN_BITWISE_AND_ASSIGN : UMC_TOKEN_BITWISE_AND) :
+                c == '^' ?
+                (assignment ? UMC_TOKEN_BITWISE_XOR_ASSIGN : UMC_TOKEN_BITWISE_XOR) :
+                (assignment ? UMC_TOKEN_BITWISE_OR_ASSIGN : UMC_TOKEN_BITWISE_OR);
+        }
+        break;
+    }
     /* Longest-match lookahead stays within the borrowed source span. Unary
      * logical negation is distinct from !=; assignment remains unsupported. */
     case '<': case '>': case '=': case '!': {

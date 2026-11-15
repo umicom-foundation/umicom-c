@@ -346,3 +346,137 @@ if(TARGET umicom-c)
             -P "${CMAKE_CURRENT_LIST_DIR}/check_cli_conditional.cmake")
     set_tests_properties(umicom.c.cli-conditional PROPERTIES TIMEOUT 60 LABELS "umicom-c;cli;conditional")
 endif()
+
+# Compound statements are a compiler extension using existing local/arithmetic
+# records. Independent native arithmetic and literal wire fixtures guard it.
+add_executable(umicom-c-test-compound-assignment test_compound_assignment.c)
+target_link_libraries(umicom-c-test-compound-assignment PRIVATE UmicomC::Compiler)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-compound-assignment PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+foreach(case IN ITEMS values faults refusals spans bounds wire-trace native)
+    add_test(NAME "umicom.c.compound-assignment.${case}"
+        COMMAND umicom-c-test-compound-assignment "${case}")
+    set_tests_properties("umicom.c.compound-assignment.${case}" PROPERTIES
+        TIMEOUT 15 LABELS "umicom-c;compound-assignment;compiler")
+endforeach()
+if(TARGET umicom-c)
+    add_test(NAME umicom.c.cli-compound-assignment
+        COMMAND "${CMAKE_COMMAND}" "-DTOOL=$<TARGET_FILE:umicom-c>"
+            "-DSOURCE=${PROJECT_SOURCE_DIR}/examples/compound_assignment.uc"
+            "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/compound-assignment-artifacts"
+            -P "${CMAKE_CURRENT_LIST_DIR}/check_cli_compound_assignment.cmake")
+    set_tests_properties(umicom.c.cli-compound-assignment PROPERTIES
+        TIMEOUT 60 LABELS "umicom-c;compound-assignment;cli")
+endif()
+
+# Conditional statement syntax lowers to the existing forward graph. Literal
+# wire and native-C fixtures check behavior independently of compiler output.
+add_executable(umicom-c-test-if-statement test_if_statement.c)
+target_link_libraries(umicom-c-test-if-statement PRIVATE UmicomC::Compiler)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-if-statement PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+foreach(case IN ITEMS values refusals faults spans nesting bounds wire-trace native)
+    add_test(NAME "umicom.c.if-statement.${case}" COMMAND umicom-c-test-if-statement "${case}")
+    set_tests_properties("umicom.c.if-statement.${case}" PROPERTIES
+        TIMEOUT 15 LABELS "umicom-c;if-statement;compiler")
+endforeach()
+if(TARGET umicom-c)
+    add_test(NAME umicom.c.cli-if-statement
+        COMMAND "${CMAKE_COMMAND}" "-DTOOL=$<TARGET_FILE:umicom-c>"
+            "-DSOURCE=${PROJECT_SOURCE_DIR}/examples/conditional_update.uc"
+            "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/conditional-update-artifacts"
+            -P "${CMAKE_CURRENT_LIST_DIR}/check_cli_if_statement.cmake")
+    set_tests_properties(umicom.c.cli-if-statement PROPERTIES
+        TIMEOUT 60 LABELS "umicom-c;if-statement;cli")
+endif()
+
+# Chained conditions are source-only lowering with unchanged forward wire records.
+add_executable(umicom-c-test-else-if test_else_if.c)
+target_link_libraries(umicom-c-test-else-if PRIVATE UmicomC::Compiler)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-else-if PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+foreach(case IN ITEMS values refusals faults depth wire fuel native capacity locations)
+    add_test(NAME "umicom.c.else-if.${case}" COMMAND umicom-c-test-else-if "${case}")
+    set_tests_properties("umicom.c.else-if.${case}" PROPERTIES
+        TIMEOUT 15 LABELS "umicom-c;else-if;compiler;branches")
+endforeach()
+if(TARGET umicom-c)
+    add_test(NAME umicom.c.cli-else-if
+        COMMAND "${CMAKE_COMMAND}" "-DTOOL=$<TARGET_FILE:umicom-c>"
+            "-DSOURCE=${PROJECT_SOURCE_DIR}/examples/conditional_chain.uc"
+            "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/conditional-chain-artifacts"
+            -P "${CMAKE_CURRENT_LIST_DIR}/check_cli_else_if.cmake")
+    set_tests_properties(umicom.c.cli-else-if PROPERTIES TIMEOUT 60 LABELS "umicom-c;else-if;cli")
+endif()
+
+# Remainder shares one checked runtime operation across source and wire clients.
+add_executable(umicom-c-test-remainder test_remainder.c)
+target_link_libraries(umicom-c-test-remainder PRIVATE UmicomC::Compiler)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-remainder PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+foreach(case IN ITEMS values faults refusals wire versions fuel malformed spans native)
+    add_test(NAME "umicom.c.remainder.${case}" COMMAND umicom-c-test-remainder "${case}")
+    set_tests_properties("umicom.c.remainder.${case}" PROPERTIES
+        TIMEOUT 20 LABELS "umicom-c;remainder;compiler;runtime")
+endforeach()
+if(TARGET umicom-c)
+    add_test(NAME umicom.c.cli-remainder
+        COMMAND "${CMAKE_COMMAND}" "-DTOOL=$<TARGET_FILE:umicom-c>"
+            "-DSOURCE=${PROJECT_SOURCE_DIR}/examples/remainder.uc"
+            "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/remainder-artifacts"
+            -P "${CMAKE_CURRENT_LIST_DIR}/check_cli_remainder.cmake")
+    set_tests_properties(umicom.c.cli-remainder PROPERTIES TIMEOUT 60 LABELS "umicom-c;remainder;cli")
+endif()
+
+# Complement changes source lowering only. Wire and native oracles guard its
+# endpoints, while bounded-depth tests exercise the unchanged runtime stack.
+add_executable(umicom-c-test-complement test_complement.c)
+target_link_libraries(umicom-c-test-complement PRIVATE UmicomC::Compiler)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-complement PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+foreach(case IN ITEMS values trace faults refusals spans capacity depth wire native)
+    add_test(NAME "umicom.c.complement.${case}" COMMAND umicom-c-test-complement "${case}")
+    set_tests_properties("umicom.c.complement.${case}" PROPERTIES
+        TIMEOUT 20 LABELS "umicom-c;complement;compiler")
+endforeach()
+if(TARGET umicom-c)
+    add_test(NAME umicom.c.cli-complement
+        COMMAND "${CMAKE_COMMAND}" "-DTOOL=$<TARGET_FILE:umicom-c>"
+            "-DSOURCE=${PROJECT_SOURCE_DIR}/examples/complement.uc"
+            "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/complement-artifacts"
+            -P "${CMAKE_CURRENT_LIST_DIR}/check_cli_complement.cmake")
+    set_tests_properties(umicom.c.cli-complement PROPERTIES TIMEOUT 60 LABELS "umicom-c;complement;cli")
+endif()
+
+
+# Eager bitwise values share one checked operation family across source and wire.
+add_executable(umicom-c-test-bitwise test_bitwise.c)
+target_link_libraries(umicom-c-test-bitwise PRIVATE UmicomC::Compiler)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-bitwise PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+foreach(case IN ITEMS values precedence updates refusals eager wire versions fuel malformed spans limits native)
+    add_test(NAME "umicom.c.bitwise.${case}" COMMAND umicom-c-test-bitwise "${case}")
+    set_tests_properties("umicom.c.bitwise.${case}" PROPERTIES
+        TIMEOUT 20 LABELS "umicom-c;bitwise;compiler;runtime")
+endforeach()
+
+if(TARGET umicom-c)
+    add_test(NAME umicom.c.cli-bitwise
+        COMMAND "${CMAKE_COMMAND}" "-DTOOL=$<TARGET_FILE:umicom-c>"
+            "-DSOURCE=${PROJECT_SOURCE_DIR}/examples/bitwise.uc"
+            "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/bitwise-artifacts"
+            -P "${CMAKE_CURRENT_LIST_DIR}/check_cli_bitwise.cmake")
+    set_tests_properties(umicom.c.cli-bitwise PROPERTIES TIMEOUT 60 LABELS "umicom-c;bitwise;cli")
+endif()

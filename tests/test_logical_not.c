@@ -97,7 +97,11 @@ static int refusals(void)
 #if 0
         "int main(void){return 1 && !0;}", "int main(void){return 1 || !0;}"
 #endif
+/* Complete bitwise operands are now accepted; keep missing unary operand refusals. */
+#if 0
         "int main(void){return 1 & !0;}", "int main(void){return 1 | !0;}"
+#endif
+        "int main(void){return 1 & !;}", "int main(void){return 1 | !;}"
     };
     UmcInstruction program[UMC_PROGRAM_LIMIT]; UmcDiagnostic diagnostic;
     size_t count = 99U;

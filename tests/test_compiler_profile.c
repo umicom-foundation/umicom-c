@@ -20,6 +20,9 @@ int main(void)
 {
     const uint32_t features = umc_compiler_profile(UMC_PROFILE_FEATURES);
     static const struct { uint32_t feature; const char *source; int32_t value; } cases[] = {
+        {UMC_FEATURE_BINARY_BITWISE, "int main(void){return 63&42;}", 42},
+        {UMC_FEATURE_BITWISE_COMPLEMENT, "int main(void){return ~(-2147483647-1);}", INT32_MAX},
+        {UMC_FEATURE_REMAINDER, "int main(void){int x=137;x%=95;return x;}", 42},
         {UMC_FEATURE_ARITHMETIC, "int main(void){return 2+3*4;}", 14},
         {UMC_FEATURE_COMPARISON, "int main(void){return 2+3<6;}", 1},
         {UMC_FEATURE_LOGICAL_NOT, "int main(void){return !0;}", 1},
@@ -27,8 +30,12 @@ int main(void)
         {UMC_FEATURE_BINARY_LITERALS, "int main(void){return 0b101010;}", 42},
         {UMC_FEATURE_LOCAL_INTEGERS, "int main(void){int x=6; x=x*7; return x;}", 42},
         {UMC_FEATURE_LOGICAL_CONNECTIVES, "int main(void){int x=0;return x && (1/x);}", 0},
-        {UMC_FEATURE_CONDITIONAL_EXPRESSIONS, "int main(void){int x=0;return x ? 1/x : 42;}", 42}
+        {UMC_FEATURE_CONDITIONAL_EXPRESSIONS, "int main(void){int x=0;return x ? 1/x : 42;}", 42},
+        {UMC_FEATURE_COMPOUND_ASSIGNMENTS, "int main(void){int x=6;x*=7;return x;}", 42},
+        {UMC_FEATURE_ELSE_IF_CHAINS, "int main(void){int x=1;if(0){x=7;}else if(1){x=42;}return x;}", 42},
+        {UMC_FEATURE_IF_STATEMENTS, "int main(void){int x=1;if(0){x=7;}else{x=42;}return x;}", 42}
     };
+    CHECK(!(umc_runtime_profile(UMC_PROFILE_FEATURES) & UMC_FEATURE_BITWISE_COMPLEMENT));
     CHECK(umc_compiler_profile(UMC_PROFILE_LOCAL_VALUES) == UMC_LOCAL_LIMIT);
     CHECK(umc_compiler_profile(UMC_PROFILE_IDENTIFIER_BYTES) == UMC_IDENTIFIER_LIMIT);
     CHECK(umc_compiler_profile(UMC_PROFILE_API) == UMC_API_VERSION);
@@ -61,7 +68,11 @@ int main(void)
 #if 0
     const char unsupported[] = "int main(void){return 1 && 1;}";
 #endif
+/* Binary bitwise is supported; retain the earlier refusal and keep shifts outside the profile. */
+#if 0
     const char unsupported[] = "int main(void){return 1 & 1;}";
+#endif
+    const char unsupported[] = "int main(void){return 1 << 1;}";
     CHECK(umc_compile(unsupported, sizeof unsupported - 1U, program, 8U,
         &count, &diagnostic) == UMC_SYNTAX_ERROR);
     return 0;

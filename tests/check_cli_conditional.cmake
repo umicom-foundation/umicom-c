@@ -63,7 +63,11 @@ endif()
 # Invalid source must not publish even a partial output artifact.
 set(invalid "${WORK}/invalid-${suffix}.uc")
 set(rejected "${WORK}/invalid-${suffix}.umcb")
+# Keep the refused CLI overwrite exercise using unsupported shift syntax; retain the old bitwise fixture.
+if(FALSE)
 file(WRITE "${invalid}" "int main(void){return 1 & 2;}")
+endif()
+file(WRITE "${invalid}" "int main(void){return 1 << 2;}")
 run_checked(1 compile "${invalid}" "${rejected}")
 if(EXISTS "${rejected}" OR output MATCHES "Result:")
     message(FATAL_ERROR "Failed logical admission published an artifact")

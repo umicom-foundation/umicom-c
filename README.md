@@ -63,3 +63,24 @@ Programs can declare up to 32 initialized integer locals, assign to existing nam
 ## Select an integer value
 
 Use `condition ? when_true : when_false` to evaluate one of two integer expressions. The selected value is preserved, and nested conditionals associate to the right. This source extension reuses the existing forward branch runtime and format 4. [Conditional values](docs/conditional-values.md) covers fallback arithmetic, recursion limits, exact wire fixtures and consumer qualification.
+
+## Update an existing local value
+
+Use `+=`, `-=`, `*=` and `/=` as statements on initialized integer locals. The compiler reuses the runtime's checked arithmetic and local operations, preserving canonical formats 3 and 4. Follow [compound assignments](docs/compound-assignments.md) for the eight-instruction example, overflow diagnosis and native-C comparison coverage. <!-- Earlier limitation retained for review: Assignment expressions, remainder and bitwise updates remain unsupported. -->
+Assignment expressions and bitwise updates remain unsupported. Checked remainder and its compound update are provided by the separate extension below.
+
+## Choose a group of updates
+
+Braced **if** and optional **else** bodies can update initialized locals or contain nested braced conditionals. Conditions run once, only the selected body executes, and both bodies are checked during compilation. The final return remains required; body-local declarations and early returns remain unsupported. Follow [conditional statements](docs/if-statements.md) for exact paths, combined recursion bounds and format-4 qualification.
+
+## Ordered conditional chains
+
+The compiler accepts braced **else if** chains through the existing forward-branch runtime. Conditions are tested in order; only the first selected update body executes. Read [ordered else-if chains](docs/else-if-chains.md) for the complete source example, profile bit, exact fuel and remaining grammar limits.
+
+## Checked integer remainder
+
+Use **%** to calculate a signed remainder or **%=** to update an initialized local. The runtime refuses zero divisors and the minimum-integer/-1 pair without publishing a result. The [remainder walkthrough](docs/remainder.md) explains sign rules, exact format-5 bytes, feature queries, bounded execution and the shared Kernel/Framework consumer boundary. Earlier artifacts keep their existing encodings.
+
+## Signed unary complement
+
+Unary **~** flips a signed 32-bit value using existing checked arithmetic. Both signed endpoints work without a new bytecode version. Read [signed complement](docs/complement.md) for a five-instruction example, exact fuel, capability queries and consumer checks. Binary bitwise operators, shifts and unsigned types remain outside the language profile.

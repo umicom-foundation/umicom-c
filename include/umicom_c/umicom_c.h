@@ -33,7 +33,14 @@ extern "C" {
 /* Additive source operators and their bounded, forward-only runtime control flow. */
 #define UMC_LOGICAL_CONNECTIVE_PROFILE 1U
 #define UMC_CONDITIONAL_EXPRESSION_PROFILE 1U
+#define UMC_COMPOUND_ASSIGNMENT_PROFILE 1U
 #define UMC_FORWARD_BRANCH_PROFILE 1U
+/* Checked signed remainder is a source and runtime capability using format 5. */
+#define UMC_REMAINDER_PROFILE 1U
+/* Signed unary ~ is compiler lowering, not a runtime or wire revision. */
+#define UMC_BITWISE_COMPLEMENT_PROFILE 1U
+/* Eager signed bitwise operations append format-6 runtime identities. */
+#define UMC_BINARY_BITWISE_PROFILE 1U
 #define UMC_LOCAL_LIMIT 32U
 #define UMC_IDENTIFIER_LIMIT 63U
 #define UMC_SOURCE_LIMIT 65536U
@@ -74,7 +81,11 @@ typedef enum UmcOpcode {
     /* Format 3 slots are bounded integers, never native addresses. */
     UMC_LOAD_LOCAL, UMC_STORE_LOCAL,
     /* Format 4 uses absolute forward instruction indices, never native addresses. */
-    UMC_JUMP, UMC_JUMP_IF_ZERO
+    UMC_JUMP, UMC_JUMP_IF_ZERO,
+    /* Append format-5 remainder without renumbering formats 1 through 4. */
+    UMC_REMAINDER,
+    /* Append format 6; formats 1 through 5 keep their opcode identities. */
+    UMC_BITWISE_AND, UMC_BITWISE_XOR, UMC_BITWISE_OR
 } UmcOpcode;
 
 typedef struct UmcInstruction {
@@ -119,6 +130,36 @@ void umc_locate_diagnostic(const char *source, size_t length, UmcDiagnostic *dia
  * assignments to previously declared locals. Names have at most 63 ASCII bytes;
  * at most 32 slots exist. Initializers cannot read the variable being declared.
  * There are no nested scopes, calls or assignment expressions. */
+/* Existing initialized locals also accept +=, -=, *= and /= statements. The
+ * old value and right expression each evaluate once; arithmetic is checked by
+ * the same runtime used for binary expressions. This adds no opcode or wire
+ * version and does not admit assignment expressions or compound declarations. */
+/* Historical braced-only conditional contract retained for source review;
+ * the following extension admits else-if spelling through the same runtime. */
+#if 0
+/* Braced if (expression) { updates } and optional else { updates } may
+ * precede the final return. Bodies admit assignments and nested if statements
+ * but no declarations, early return, standalone scope or else-if shorthand.
+ * All names must already be initialized; both arms are compiled. Conditions
+ * execute once and zero selects the false arm. Statement and expression
+ * nesting share the parse-depth limit; no new opcode or wire format is added. */
+#endif
+/* Braced if bodies may be followed by else if (expression) { updates }
+ * chains and an optional final else { updates }. Conditions are tested in
+ * order; only the first selected body executes. Every condition/body parses
+ * and references initialized locals. Each nested if, including an else-if,
+ * consumes the shared statement/expression depth budget. Bodies still exclude
+ * declarations, early returns and standalone scopes. A final top-level return
+ * is required. Existing opcode identities and bytecode formats are unchanged. */
+/* Binary % binds with * and /, groups from the left and evaluates each
+ * operand once. %= updates one initialized local with the same operation.
+ * The result follows truncating division and has the dividend's sign when
+ * nonzero. A zero divisor and INT32_MIN % -1 fail before host arithmetic.
+ * Existing compound-source syntax and result ownership remain unchanged. */
+/* Binary &, ^ and | operate eagerly on signed 32-bit representations.
+ * Equality binds more tightly than &, then ^, then |, then logical && and ||.
+ * Local &=, ^= and |= statements evaluate the old value and right side once.
+ * Shifts, address-taking, pointers and assignment expressions are excluded. */
 UmcStatus umc_compile(const char *source, size_t length,
     UmcInstruction *output, size_t capacity, size_t *count,
     UmcDiagnostic *diagnostic);
@@ -159,10 +200,25 @@ UmcStatus umc_inspect(const UmcInstruction *program, size_t count,
 UmcStatus umc_execute(const UmcInstruction *program, size_t count, size_t fuel,
     UmcResult *result, UmcDiagnostic *diagnostic);
 
+/* Earlier minimum-format documentation is retained for compatibility review. */
+#if 0
 /* Arithmetic-only programs retain format 1. Programs containing comparison
  * opcodes use format 2 when no locals occur. LOAD_LOCAL or STORE_LOCAL requires
  * format 3 when no branches occur. JUMP or JUMP_IF_ZERO requires format 4.
  * Decoding refuses any mismatch with the minimum required profile. */
+#endif
+/* Retain the format-5 contract for review; format 6 is additive below. */
+#if 0
+/* Arithmetic uses format 1, comparisons require at least 2, locals at least 3,
+ * forward branches at least 4, and remainder at least 5. Encoding selects the
+ * maximum requirement across the complete program. A decoder refuses any
+ * header version other than that minimum, including a newer unnecessary one.
+ * Programs without remainder keep their previous exact wire representation. */
+#endif
+/* Arithmetic uses format 1, comparisons 2, locals 3, forward branches 4,
+ * remainder 5 and binary bitwise operations 6. Select the maximum requirement
+ * across all records. Decode rejects both older and unnecessarily newer
+ * headers. Programs without binary bitwise operations retain exact old bytes. */
 /* Stable little-endian bytecode. No structure casts, executable mappings, host
  * addresses or machine-dependent padding are accepted. Size/count is zero on
  * failure; buffers may contain a partial decode and must not then be executed. */

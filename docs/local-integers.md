@@ -63,7 +63,7 @@ The slot number is assigned in declaration order. It is not a native memory addr
 4. Run the valid example with --max-steps 7. The last return cannot execute. No result is published; a failed trace records that attempted step.
 5. Add 33 initialized names. The compiler returns UMC_LOCAL_CAPACITY and publishes an instruction count of zero. Split a larger design into a supported host application; this profile does not yet have functions or nested scopes.
 
-There is no uninitialized declaration, chained assignment, comma declaration, increment operator, array, pointer or nested block. int x=1; is supported; int x; and return x=2; are not. An initializer may use earlier variables, arithmetic, comparison, ! and supported numeric spellings. Checked arithmetic errors still occur during execution.
+There is no uninitialized declaration, chained assignment, comma declaration, increment operator, array, pointer or standalone nested block. int x=1; is supported; int x; and return x=2; are not. An initializer may use earlier variables, arithmetic, comparison, ! and supported numeric spellings. Checked arithmetic errors still occur during execution.
 
 ## Understand the storage boundary
 
@@ -83,3 +83,11 @@ Source tests cover visibility, syntax, identifier and slot bounds. Runtime-only 
 The Kernel CVM envelope has separate local selectors at O0 and O2. The optional Framework preview adapter translates local capacity to its shared capacity status and clears stale results on failure. Install matching headers and libraries before qualifying that consumer; host test success does not establish SDK, application or GUI qualification.
 
 Read [the language](language.md), [wire layout](bytecode.md) and [capability queries](capability-profiles.md) alongside [test_local_source.c](../tests/test_local_source.c), [test_local_runtime.c](../tests/test_local_runtime.c) and [the CLI fixture](../tests/check_cli_local_integers.cmake).
+
+## Update using the old value
+
+Initialized locals also accept `value += amount;`, `value -= amount;`, `value *= factor;` and `value /= divisor;`. Declarations still need `=`. These statements retain checked arithmetic, per-execution slot storage and failed-result preservation. Follow [compound assignment lowering](compound-assignments.md) before changing a compiler consumer.
+
+## Update along a selected path
+
+A braced **if** body and its optional braced **else** body may assign to existing locals or nest another conditional. Declare names before these bodies; body-local declarations and early returns are not accepted. Both paths are compiled, but only the selected path executes its arithmetic. This preserves the flat name scope and existing definite-initialization rules. See [conditional statements](if-statements.md) for the branch layout, fuel differences and shared parse-depth budget.

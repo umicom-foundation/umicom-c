@@ -55,6 +55,10 @@ const char *umc_opcode_text(UmcOpcode opcode)
     case UMC_STORE_LOCAL: return "store-local";
     case UMC_JUMP: return "jump";
     case UMC_JUMP_IF_ZERO: return "jump-if-zero";
+    case UMC_REMAINDER: return "remainder";
+    case UMC_BITWISE_AND: return "bitwise-and";
+    case UMC_BITWISE_XOR: return "bitwise-xor";
+    case UMC_BITWISE_OR: return "bitwise-or";
     default: return "invalid";
     }
 }
@@ -143,6 +147,8 @@ uint32_t umc_runtime_profile(UmcProfileProperty property)
 
 #endif
 
+/* Advertise remainder and format 5 from the linked runtime, independently of compiler-only syntax. The predecessor remains disabled for review. */
+#if 0
 uint32_t umc_runtime_profile(UmcProfileProperty property)
 {
     switch (property) {
@@ -154,6 +160,41 @@ uint32_t umc_runtime_profile(UmcProfileProperty property)
     case UMC_PROFILE_STACK_VALUES: return UMC_STACK_LIMIT;
     case UMC_PROFILE_BYTECODE_BYTES: return UMC_BYTECODE_LIMIT;
     case UMC_PROFILE_WIRE_VERSIONS: return (UINT32_C(1) << 1U) | (UINT32_C(1) << 2U) | (UINT32_C(1) << 3U) | (UINT32_C(1) << 4U);
+    case UMC_PROFILE_LOCAL_VALUES: return UMC_LOCAL_LIMIT;
+    default: return 0U;
+    }
+}
+#endif
+
+/* Report the linked runtime operation capability and its newly admitted wire profile. The previous implementation remains for review. */
+#if 0
+uint32_t umc_runtime_profile(UmcProfileProperty property)
+{
+    switch (property) {
+    case UMC_PROFILE_API: return UMC_API_VERSION;
+    case UMC_PROFILE_FEATURES:
+        return UMC_FEATURE_ARITHMETIC | UMC_FEATURE_COMPARISON |
+            UMC_FEATURE_EXECUTION_TRACE | UMC_FEATURE_PROGRAM_INSPECTION | UMC_FEATURE_LOCAL_INTEGERS | UMC_FEATURE_FORWARD_BRANCHES | UMC_FEATURE_REMAINDER;
+    case UMC_PROFILE_PROGRAM_INSTRUCTIONS: return UMC_PROGRAM_LIMIT;
+    case UMC_PROFILE_STACK_VALUES: return UMC_STACK_LIMIT;
+    case UMC_PROFILE_BYTECODE_BYTES: return UMC_BYTECODE_LIMIT;
+    case UMC_PROFILE_WIRE_VERSIONS: return (UINT32_C(1) << 1U) | (UINT32_C(1) << 2U) | (UINT32_C(1) << 3U) | (UINT32_C(1) << 4U) | (UINT32_C(1) << 5U);
+    case UMC_PROFILE_LOCAL_VALUES: return UMC_LOCAL_LIMIT;
+    default: return 0U;
+    }
+}
+#endif
+uint32_t umc_runtime_profile(UmcProfileProperty property)
+{
+    switch (property) {
+    case UMC_PROFILE_API: return UMC_API_VERSION;
+    case UMC_PROFILE_FEATURES:
+        return UMC_FEATURE_ARITHMETIC | UMC_FEATURE_COMPARISON |
+            UMC_FEATURE_EXECUTION_TRACE | UMC_FEATURE_PROGRAM_INSPECTION | UMC_FEATURE_LOCAL_INTEGERS | UMC_FEATURE_FORWARD_BRANCHES | UMC_FEATURE_REMAINDER | UMC_FEATURE_BINARY_BITWISE;
+    case UMC_PROFILE_PROGRAM_INSTRUCTIONS: return UMC_PROGRAM_LIMIT;
+    case UMC_PROFILE_STACK_VALUES: return UMC_STACK_LIMIT;
+    case UMC_PROFILE_BYTECODE_BYTES: return UMC_BYTECODE_LIMIT;
+    case UMC_PROFILE_WIRE_VERSIONS: return (UINT32_C(1) << 1U) | (UINT32_C(1) << 2U) | (UINT32_C(1) << 3U) | (UINT32_C(1) << 4U) | (UINT32_C(1) << 5U) | (UINT32_C(1) << 6U);
     case UMC_PROFILE_LOCAL_VALUES: return UMC_LOCAL_LIMIT;
     default: return 0U;
     }
