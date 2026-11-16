@@ -97,7 +97,11 @@ static int refusals(void)
 #if 0
         "int x=1;x&=2;return x;", "int x=1;x++;return x;", "int x=1;++x;return x;",
 #endif
+/* Standalone ++ is now supported and covered positively; expression-valued and separated updates remain refusals. The former implementation is retained for owner review. */
+#if 0
         "int x=1;x& =2;return x;", "int x=1;x++;return x;", "int x=1;++x;return x;",
+#endif
+        "int x=1;x& =2;return x;", "int x=1;return x++;", "int x=1;return ++x;",
         "int x=1;x===2;return x;", "int x=1;x+=2 return x;"
     };
     for(size_t i=0U;i<sizeof bodies/sizeof bodies[0];++i) {

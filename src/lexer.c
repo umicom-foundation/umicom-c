@@ -200,7 +200,33 @@ UmcStatus umc_lex_next(UmcLexer *lexer, UmcToken *token, UmcDiagnostic *diagnost
     case '*': token->kind = UMC_TOKEN_STAR; break;
     case '/': token->kind = UMC_TOKEN_SLASH; break;
 #endif
+/* Adjacent increment/decrement now have their own bounded tokens; existing arithmetic and compound-assignment behavior is retained. The former implementation is retained for owner review. */
+#if 0
     case '+': case '-': case '*': case '/': {
+        const bool paired = lexer->position < lexer->length &&
+            lexer->source[lexer->position] == '=';
+        if (paired) {
+            ++lexer->position;
+            token->length = 2U;
+        }
+        if (c == '+') token->kind = paired ? UMC_TOKEN_ADD_ASSIGN : UMC_TOKEN_PLUS;
+        else if (c == '-') token->kind = paired ? UMC_TOKEN_SUBTRACT_ASSIGN : UMC_TOKEN_MINUS;
+        else if (c == '*') token->kind = paired ? UMC_TOKEN_MULTIPLY_ASSIGN : UMC_TOKEN_STAR;
+        else token->kind = paired ? UMC_TOKEN_DIVIDE_ASSIGN : UMC_TOKEN_SLASH;
+        break;
+    }
+
+#endif
+    case '+': case '-': case '*': case '/': {
+        /* Longest match keeps ++/-- separate from two spaced unary signs.
+         * Only initialized-local statement parsing consumes these tokens. */
+        if ((c == '+' || c == '-') && lexer->position < lexer->length &&
+            lexer->source[lexer->position] == (char)c) {
+            ++lexer->position;
+            token->length = 2U;
+            token->kind = c == '+' ? UMC_TOKEN_INCREMENT : UMC_TOKEN_DECREMENT;
+            break;
+        }
         const bool paired = lexer->position < lexer->length &&
             lexer->source[lexer->position] == '=';
         if (paired) {

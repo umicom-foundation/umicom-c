@@ -26,7 +26,11 @@ int main(void)
         {"int main(void) { return 20 / 5 / 2; }", 2},
         {"int main(void) { return 10 - 3 - 2; }", 5},
         {"int main(void) { return -7 / 2; }", -3},
+/* Adjacent -- is now one decrement token. Preserve the previous fixture and keep the independent unary-minus test with separated tokens. The former implementation is retained for owner review. */
+#if 0
         {"int main(void) { return +--7; }", 7},
+#endif
+        {"int main(void) { return +- -7; }", 7},
         {"int/**/main(void) { // line\n return 40 /* block */ + 2; }", 42},
         {"int main(void) { return (-2147483647 - 1); }", INT32_MIN},
         {"int main(void) { return 0x10; }", 16}
@@ -43,6 +47,7 @@ int main(void)
         CHECK(result.instructions_executed == count);
     }
     static const char *const invalid[] = {
+        "int main(void) { return +--7; }",
         "", "int main() { return 1; }", "int main(void) { return 1 }",
         "int main(void) { return 1; } garbage", "int main(void) { return 1 2; }",
         "int main(void) { return 1/**/2; }", "int main(void) { return (1 +); }",
@@ -85,7 +90,13 @@ int main(void)
     const char prefix[] = "int main(void){return ";
     size_t length = sizeof(prefix) - 1U;
     memcpy(nested, prefix, length);
+/* Keep testing parser depth rather than decrement-token refusal; whitespace separates the unary operators. The former implementation is retained for owner review. */
+#if 0
     for (size_t i = 0U; i < UMC_PARSE_DEPTH_LIMIT + 1U; ++i) nested[length++] = '-';
+#endif
+    for (size_t i = 0U; i < UMC_PARSE_DEPTH_LIMIT + 1U; ++i) {
+        nested[length++] = '-'; nested[length++] = ' ';
+    }
     nested[length++] = '1'; nested[length++] = ';'; nested[length++] = '}';
     CHECK(umc_compile(nested, length, program, UMC_PROGRAM_LIMIT, &count, &diagnostic) == UMC_DEPTH_LIMIT);
     CHECK(count == 0U);

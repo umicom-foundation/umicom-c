@@ -55,7 +55,11 @@ static int refusals(void)
 #if 0
         "int main(void){int x=1; x%=1; return x;}", "int main(void){int x=1; x++; return x;}",
 #endif
+/* Standalone ++ is now supported and covered positively; expression-valued and separated updates remain refusals. The former implementation is retained for owner review. */
+#if 0
         "int main(void){int x=1; x% =1; return x;}", "int main(void){int x=1; x++; return x;}",
+#endif
+        "int main(void){int x=1; x% =1; return x;}", "int main(void){int x=1; x+ +; return x;}",
         "int main(void){{int x=1;} return 0;}", "int main(void){int x[2]=1; return 0;}",
         "int main(void){int *x=0; return 0;}", "int main(void){int x=1; return x; x=2;}",
         "int main(void){int x=1; return X;}", "int main(void){int return=1; return 0;}",

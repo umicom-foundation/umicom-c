@@ -39,10 +39,12 @@ The grammar below is a compact way to describe the accepted shapes. A quoted ite
 
 <!-- Earlier production retained for language history: logical-and = equality ("&&" equality)* -->
 
+<!-- Earlier update production retained for grammar review: update     = identifier assignment-operator expression ";" -->
+
 ```text
 program    = "int" "main" "(" "void" ")" "{" statement* "return" expression ";" "}" end
 statement  = "int" identifier "=" expression ";" | update | conditional-statement
-update     = identifier assignment-operator expression ";"
+update     = identifier assignment-operator expression ";" | ("++" | "--") identifier ";" | identifier ("++" | "--") ";"
 conditional-statement = "if" "(" expression ")" body ("else" (body | conditional-statement))?
 body       = "{" (update | conditional-statement)* "}"
 assignment-operator = "=" | "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "^=" | "|="
@@ -134,7 +136,8 @@ Negation does not suppress errors: `!(1 / 0)` fails while evaluating division. E
 
 A local names an integer stored during this execution. Declare it with `int count = 6;`, assign a new value with `count = count * 7;`, and read it with `return count;`. The initializer may read earlier declarations. The new name becomes visible only after its initializer has compiled. Self-reference, forward reference, duplicate declarations and reads of undeclared names are errors.
 
-Names contain ASCII letters, digits and underscore, begin with a letter or underscore, are case sensitive and have at most 63 bytes. The keywords `int`, `main`, `void`, `return`, `if` and `else` are reserved. There are at most 32 locals per program. Their storage belongs to one execution; it does not survive a later call. Every declaration requires an initializer. There is one flat scope and no comma declaration, address operator, pointer, array or increment operation.
+Names contain ASCII letters, digits and underscore, begin with a letter or underscore, are case sensitive and have at most 63 bytes. The keywords `int`, `main`, `void`, `return`, `if` and `else` are reserved. There are at most 32 locals per program. Their storage belongs to one execution; it does not survive a later call. Every declaration requires an initializer. <!-- Previous restriction retained for review: There is one flat scope and no comma declaration, address operator, pointer, array or increment operation. -->
+There is one flat scope and no comma declaration, address operator, pointer or array. Standalone increment and decrement are described below.
 
 Read [the local integer walkthrough](local-integers.md) for lowering, slot validation, tracing and recovery.
 
@@ -142,7 +145,8 @@ Read [the local integer walkthrough](local-integers.md) for lowering, slot valid
 
 `a && b` evaluates `a` first and skips `b` when `a` is zero. `a || b` skips `b` when `a` is nonzero. Both return exactly 0 or 1. Equality binds more tightly than `&&`, and `&&` more tightly than `||`. Use `divisor != 0 && 42 / divisor > 1` to guard division. Reversing the operands removes that protection.
 
-The compiler emits forward-only branch instructions and selects canonical format 4. The whole program is structurally validated, including the skipped arm, but skipped arithmetic is not evaluated. Single `&` and `|` remain unsupported. Read [short-circuit evaluation](short-circuit.md) for trace and fuel examples.
+The compiler emits forward-only branch instructions and selects canonical format 4. The whole program is structurally validated, including the skipped arm, but skipped arithmetic is not evaluated. <!-- Earlier restriction retained: Single `&` and `|` remain unsupported. -->
+Single `&` and `|` are eager bitwise operators, described below. Read [short-circuit evaluation](short-circuit.md) for trace and fuel examples.
 
 ## Conditional values
 
@@ -180,3 +184,7 @@ Binary &, ^ and | are supported as described below. Shifts and ~= remain unsuppo
 ## Binary bitwise operators
 
 Binary &, ^ and | operate eagerly on the signed 32-bit representation. Equality binds more tightly than &, then ^, then |; logical && and || bind more loosely. Initialized locals also accept &=, ^= and |= as statements. The source and runtime advertise UMC_FEATURE_BINARY_BITWISE; emitted bitwise operations require wire format 6. See [binary bitwise operators](bitwise.md) for grouping, signed endpoints, exact fuel and independent consumer checks.
+
+## Standalone increment and decrement
+
+The statements `++value;`, `value++;`, `--value;` and `value--;` update an initialized integer local by one. Both spellings discard the value of the update, so their behavior is identical in this limited grammar. Expression forms such as `return value++;` remain unsupported. The adjacent pair is one token; `+ +value` is not increment. Updates are also allowed inside existing braced conditional bodies. Each emits LOAD_LOCAL, PUSH 1, ADD or SUBTRACT, STORE_LOCAL, with checked signed arithmetic. Source capability bit 131072 advertises this syntax. No runtime feature bit or wire version is added. Read [step-by-step integer updates](increment-statements.md) for commands, fuel, overflow and verification.

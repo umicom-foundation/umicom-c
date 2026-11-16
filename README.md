@@ -67,7 +67,8 @@ Use `condition ? when_true : when_false` to evaluate one of two integer expressi
 ## Update an existing local value
 
 Use `+=`, `-=`, `*=` and `/=` as statements on initialized integer locals. The compiler reuses the runtime's checked arithmetic and local operations, preserving canonical formats 3 and 4. Follow [compound assignments](docs/compound-assignments.md) for the eight-instruction example, overflow diagnosis and native-C comparison coverage. <!-- Earlier limitation retained for review: Assignment expressions, remainder and bitwise updates remain unsupported. -->
-Assignment expressions and bitwise updates remain unsupported. Checked remainder and its compound update are provided by the separate extension below.
+<!-- Earlier limitation retained: Assignment expressions and bitwise updates remain unsupported. Checked remainder and its compound update are provided by the separate extension below. -->
+Assignment expressions remain unsupported. Checked remainder and bitwise compound updates are provided by the extensions below.
 
 ## Choose a group of updates
 
@@ -84,3 +85,7 @@ Use **%** to calculate a signed remainder or **%=** to update an initialized loc
 ## Signed unary complement
 
 Unary **~** flips a signed 32-bit value using existing checked arithmetic. Both signed endpoints work without a new bytecode version. Read [signed complement](docs/complement.md) for a five-instruction example, exact fuel, capability queries and consumer checks. Binary bitwise operators, shifts and unsigned types remain outside the language profile.
+
+## Standalone updates by one
+
+Use `++value;`, `value++;`, `--value;` or `value--;` on initialized integer locals, including inside conditional bodies. These statements reuse checked arithmetic and preserve existing runtime and wire contracts. [Change an integer by one](docs/increment-statements.md) explains the statement-only grammar, exact execution budget and overflow handling.

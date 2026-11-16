@@ -20,6 +20,7 @@ int main(void)
 {
     const uint32_t features = umc_compiler_profile(UMC_PROFILE_FEATURES);
     static const struct { uint32_t feature; const char *source; int32_t value; } cases[] = {
+        {UMC_FEATURE_INCREMENT_STATEMENTS, "int main(void){int x=41;++x;return x;}", 42},
         {UMC_FEATURE_BINARY_BITWISE, "int main(void){return 63&42;}", 42},
         {UMC_FEATURE_BITWISE_COMPLEMENT, "int main(void){return ~(-2147483647-1);}", INT32_MAX},
         {UMC_FEATURE_REMAINDER, "int main(void){int x=137;x%=95;return x;}", 42},

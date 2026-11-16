@@ -621,6 +621,37 @@ static void local_statement(UmcParser *parser, size_t depth)
     emit(parser, UMC_STORE_LOCAL, (int32_t)slot, name.offset);
 }
 #endif
+/* Statement-only updates have no expression result to retain. Resolve a single
+ * initialized local, then reuse checked arithmetic and the validated store.
+ * Both prefix and postfix forms evaluate the same one update exactly once. */
+static void emit_increment(UmcParser *parser, size_t slot, const UmcToken *operation)
+{
+    emit(parser, UMC_LOAD_LOCAL, (int32_t)slot, operation->offset);
+    emit(parser, UMC_PUSH, 1, operation->offset);
+    emit(parser, operation->kind == UMC_TOKEN_INCREMENT ? UMC_ADD : UMC_SUBTRACT,
+         0, operation->offset);
+    emit(parser, UMC_STORE_LOCAL, (int32_t)slot, operation->offset);
+}
+static void prefix_increment_statement(UmcParser *parser)
+{
+    const UmcToken operation = parser->token;
+    advance(parser);
+    if (parser->status != UMC_OK) return;
+    const UmcToken name = parser->token;
+    if (name.kind != UMC_TOKEN_IDENTIFIER) {
+        local_error(parser, name.offset, "increment requires an initialized local name");
+        return;
+    }
+    const size_t slot = find_local(parser, &name);
+    if (slot == UMC_LOCAL_LIMIT) {
+        local_error(parser, name.offset, "increment requires a declared local integer");
+        return;
+    }
+    advance(parser);
+    expect(parser, UMC_TOKEN_SEMICOLON);
+    if (parser->status == UMC_OK) emit_increment(parser, slot, &operation);
+}
+
 static void local_statement(UmcParser *parser, size_t depth)
 {
     const bool declaration = parser->token.kind == UMC_TOKEN_INT;
@@ -657,6 +688,13 @@ static void local_statement(UmcParser *parser, size_t depth)
     advance(parser);
     if (parser->status != UMC_OK) return;
     const UmcToken operation = parser->token;
+    if (!declaration && (operation.kind == UMC_TOKEN_INCREMENT ||
+                         operation.kind == UMC_TOKEN_DECREMENT)) {
+        advance(parser);
+        expect(parser, UMC_TOKEN_SEMICOLON);
+        if (parser->status == UMC_OK) emit_increment(parser, slot, &operation);
+        return;
+    }
     UmcOpcode arithmetic = UMC_PUSH; /* Sentinel, never emitted for plain =. */
     if (!declaration) {
         switch (operation.kind) {
@@ -696,7 +734,13 @@ static void if_body(UmcParser *parser, size_t depth)
 {
     expect(parser, UMC_TOKEN_OPEN);
     while (parser->status == UMC_OK) {
+/* Conditional bodies also admit the same checked prefix update statement. The former implementation is retained for owner review. */
+#if 0
         if (parser->token.kind == UMC_TOKEN_IDENTIFIER) local_statement(parser, depth);
+#endif
+        if (parser->token.kind == UMC_TOKEN_IDENTIFIER) local_statement(parser, depth);
+        else if (parser->token.kind == UMC_TOKEN_INCREMENT || parser->token.kind == UMC_TOKEN_DECREMENT)
+            prefix_increment_statement(parser);
         else if (parser->token.kind == UMC_TOKEN_IF) if_statement(parser, depth);
         else break;
     }
@@ -843,8 +887,15 @@ UmcStatus umc_compile(const char *source, size_t length,
         local_statement(&parser);
 #endif
     while (parser.status == UMC_OK) {
+/* Top-level updates reuse the initialized local owner and keep the required final return. The former implementation is retained for owner review. */
+#if 0
         if (parser.token.kind == UMC_TOKEN_INT || parser.token.kind == UMC_TOKEN_IDENTIFIER)
             local_statement(&parser, 0U);
+#endif
+        if (parser.token.kind == UMC_TOKEN_INT || parser.token.kind == UMC_TOKEN_IDENTIFIER)
+            local_statement(&parser, 0U);
+        else if (parser.token.kind == UMC_TOKEN_INCREMENT || parser.token.kind == UMC_TOKEN_DECREMENT)
+            prefix_increment_statement(&parser);
         else if (parser.token.kind == UMC_TOKEN_IF) if_statement(&parser, 0U);
         else break;
     }
@@ -1016,11 +1067,19 @@ uint32_t umc_compiler_profile(UmcProfileProperty property)
             UMC_FEATURE_COMPOUND_ASSIGNMENTS | UMC_FEATURE_IF_STATEMENTS |
             UMC_FEATURE_ELSE_IF_CHAINS | UMC_FEATURE_REMAINDER | UMC_FEATURE_BITWISE_COMPLEMENT;
 #endif
+        /* Standalone updates reuse runtime arithmetic; retain the earlier source-only mask for review. */
+#if 0
         return UMC_FEATURE_ARITHMETIC | UMC_FEATURE_COMPARISON | UMC_FEATURE_LOGICAL_NOT |
             UMC_FEATURE_HEXADECIMAL_LITERALS | UMC_FEATURE_BINARY_LITERALS | UMC_FEATURE_LOCAL_INTEGERS | UMC_FEATURE_LOGICAL_CONNECTIVES | UMC_FEATURE_CONDITIONAL_EXPRESSIONS |
             UMC_FEATURE_COMPOUND_ASSIGNMENTS | UMC_FEATURE_IF_STATEMENTS |
             UMC_FEATURE_ELSE_IF_CHAINS | UMC_FEATURE_REMAINDER | UMC_FEATURE_BITWISE_COMPLEMENT |
             UMC_FEATURE_BINARY_BITWISE;
+#endif
+        return UMC_FEATURE_ARITHMETIC | UMC_FEATURE_COMPARISON | UMC_FEATURE_LOGICAL_NOT |
+            UMC_FEATURE_HEXADECIMAL_LITERALS | UMC_FEATURE_BINARY_LITERALS | UMC_FEATURE_LOCAL_INTEGERS | UMC_FEATURE_LOGICAL_CONNECTIVES | UMC_FEATURE_CONDITIONAL_EXPRESSIONS |
+            UMC_FEATURE_COMPOUND_ASSIGNMENTS | UMC_FEATURE_IF_STATEMENTS |
+            UMC_FEATURE_ELSE_IF_CHAINS | UMC_FEATURE_REMAINDER | UMC_FEATURE_BITWISE_COMPLEMENT |
+            UMC_FEATURE_BINARY_BITWISE | UMC_FEATURE_INCREMENT_STATEMENTS;
     case UMC_PROFILE_LOCAL_VALUES: return UMC_LOCAL_LIMIT;
     case UMC_PROFILE_IDENTIFIER_BYTES: return UMC_IDENTIFIER_LIMIT;
     case UMC_PROFILE_SOURCE_BYTES: return UMC_SOURCE_LIMIT;

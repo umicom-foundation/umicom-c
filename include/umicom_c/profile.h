@@ -63,6 +63,8 @@ typedef enum UmcProfileProperty {
 #define UMC_FEATURE_BITWISE_COMPLEMENT UINT32_C(32768)
 /* Eager binary bitwise source and runtime support requires wire format 6. */
 #define UMC_FEATURE_BINARY_BITWISE UINT32_C(65536)
+/* Standalone initialized-local ++/-- lowers to existing slot/arithmetic records. */
+#define UMC_FEATURE_INCREMENT_STATEMENTS UINT32_C(131072)
 
 /* Runtime reports arithmetic/comparison, trace and inspection, program/stack/
  * bytecode limits, and supported wire-version bits (1U << version).

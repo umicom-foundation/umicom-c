@@ -480,3 +480,24 @@ if(TARGET umicom-c)
             -P "${CMAKE_CURRENT_LIST_DIR}/check_cli_bitwise.cmake")
     set_tests_properties(umicom.c.cli-bitwise PROPERTIES TIMEOUT 60 LABELS "umicom-c;bitwise;cli")
 endif()
+
+
+# Source-only ++/-- uses the established local slot and arithmetic runtime.
+add_executable(umicom-c-test-increment test_increment.c)
+target_link_libraries(umicom-c-test-increment PRIVATE UmicomC::Compiler)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-increment PRIVATE
+        -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+foreach(case values refusals faults wire-fuel spans bounds native)
+    add_test(NAME "umicom.c.increment.${case}" COMMAND umicom-c-test-increment "${case}")
+    set_tests_properties("umicom.c.increment.${case}" PROPERTIES
+        TIMEOUT 20 LABELS "umicom-c;increment;compiler;runtime")
+endforeach()
+if(TARGET umicom-c)
+    add_test(NAME umicom.c.cli-increment COMMAND "${CMAKE_COMMAND}"
+        "-DTOOL=$<TARGET_FILE:umicom-c>" "-DSOURCE=${PROJECT_SOURCE_DIR}/examples/increment.uc"
+        "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/increment-artifacts"
+        -P "${CMAKE_CURRENT_LIST_DIR}/check_cli_increment.cmake")
+    set_tests_properties(umicom.c.cli-increment PROPERTIES TIMEOUT 60 LABELS "umicom-c;increment;cli")
+endif()
