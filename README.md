@@ -89,3 +89,7 @@ Unary **~** flips a signed 32-bit value using existing checked arithmetic. Both 
 ## Standalone updates by one
 
 Use `++value;`, `value++;`, `--value;` or `value--;` on initialized integer locals, including inside conditional bodies. These statements reuse checked arithmetic and preserve existing runtime and wire contracts. [Change an integer by one](docs/increment-statements.md) explains the statement-only grammar, exact execution budget and overflow handling.
+
+## Early feedback and paused execution
+
+Use [the seven-lesson execution course](docs/execution-course.html) to learn syntax checking, stepping, bytecode and explicit-root collection. [Interactive debugging](docs/interactive-debugging.md) documents debug and debug-bytecode commands. [Managed objects](docs/managed-objects.md) describes the optional separate handle heap. [Language regions](docs/language-regions.md) documents classification-only tags; BASIC, Java and full C23 compilation remain outside this implementation.

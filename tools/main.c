@@ -13,6 +13,8 @@
  * MIT
  *---------------------------------------------------------------------------*/
 #include "umicom_c/umicom_c.h"
+#include "debugger.h"
+#include "umicom_c/source_regions.h"
 #include "umicom_c/trace.h"
 #include "umicom_c/profile.h"
 #include "umicom_c/comparison.h"
@@ -64,6 +66,9 @@ static int usage(void)
 {
     fputs("Usage:\n"
           "  umicom-c check source.uc\n"
+          "  umicom-c regions mixed.umc\n"
+          "  umicom-c debug source.uc [--max-steps N]\n"
+          "  umicom-c debug-bytecode program.umcb [--max-steps N]\n"
           "  umicom-c compare-operations left.uc right.uc\n"
           "  umicom-c inspect source.uc\n"
           "  umicom-c inspect-bytecode program.umcb\n"
@@ -196,8 +201,25 @@ static int compare_operations(const char *left_path, const char *right_path)
     return equal ? 0 : 1;
 }
 
+/* Region reporting never treats a recognized language as executable support. */
+static int print_regions(const char *name)
+{
+    uint8_t source[UMC_SOURCE_LIMIT];size_t length=0,count=0;
+    UmcSourceRegion regions[UMC_REGION_LIMIT];UmcDiagnostic d;
+    if(!read_file(name,source,sizeof source,&length))return 2;
+    if(umc_source_regions((const char *)source,length,regions,UMC_REGION_LIMIT,&count,&d)!=UMC_OK){
+        fprintf(stderr,"%s: source-byte=%zu: %s\n",name,d.source_offset,d.message);return 1;
+    }
+    for(size_t i=0;i<count;++i)printf("region=%zu language=%s offset=%zu bytes=%zu\n",i,
+        umc_source_language_name(regions[i].language),regions[i].offset,regions[i].length);
+    puts("Classification only; tags do not compile or execute BASIC, Java or full C23.");
+    return fflush(stdout)!=0 || ferror(stdout)?2:0;
+}
+
 int main(int argc, char **argv)
 {
+    if (argc >= 2 && strcmp(argv[1], "regions") == 0)
+        return argc == 3 ? print_regions(argv[2]) : usage();
     if (argc >= 2 && strcmp(argv[1], "compare-operations") == 0)
         return argc == 4 ? compare_operations(argv[2], argv[3]) : usage();
     if (argc >= 2 && strcmp(argv[1], "profile") == 0)
@@ -222,6 +244,9 @@ int main(int argc, char **argv)
     const int trace_source = strcmp(argv[1], "trace") == 0;
     const int trace_bytes = strcmp(argv[1], "trace-bytecode") == 0;
     const int tracing = trace_source || trace_bytes;
+    const int debug_source = strcmp(argv[1], "debug") == 0;
+    const int debug_bytes = strcmp(argv[1], "debug-bytecode") == 0;
+    const int debugging = debug_source || debug_bytes;
     /* The original fixed-arity rule is retained for review. The replacement
      * keeps all earlier commands and admits an execution-only budget option. */
 #if 0
@@ -242,8 +267,13 @@ int main(int argc, char **argv)
     if ((run || execute) && argc == 5) {
 #endif
     if (!check && !run && !compile && !execute && !disassemble &&
+/* Admit interactive stepping through the same bounded compiler and bytecode routes. The former implementation is retained for owner review. */
+#if 0
         !inspect_source && !inspect_bytes && !tracing) return usage();
     if ((run || execute || tracing) && argc == 5) {
+#endif
+        !inspect_source && !inspect_bytes && !tracing && !debugging) return usage();
+    if ((run || execute || tracing || debugging) && argc == 5) {
         if (strcmp(argv[3], "--max-steps") != 0 || !step_limit(argv[4], &fuel)) {
             fprintf(stderr, "--max-steps requires a decimal integer from 1 to %u.\n",
                 (unsigned)UMC_PROGRAM_LIMIT);
@@ -268,13 +298,19 @@ int main(int argc, char **argv)
 #if 0
     const int binary = execute || disassemble || inspect_bytes;
 #endif
+/* Keep bytecode debugger input on the bounded decoder. The former implementation is retained for owner review. */
+#if 0
     const int binary = execute || disassemble || inspect_bytes || trace_bytes;
+#endif
+    const int binary = execute || disassemble || inspect_bytes || trace_bytes || debug_bytes;
     if (!read_file(argv[2], input, binary ? UMC_BYTECODE_LIMIT : UMC_SOURCE_LIMIT, &length)) {
         return 2;
     }
     UmcStatus status = binary ?
         umc_decode(input, length, instructions, UMC_PROGRAM_LIMIT, &count, &diagnostic) :
         umc_compile((const char *)input, length, instructions, UMC_PROGRAM_LIMIT, &count, &diagnostic);
+    if (status == UMC_OK && debugging)
+        return umc_debug_console(binary ? NULL : (const char *)input, length, instructions, count, fuel, stdin, stdout, stderr);
     if (status == UMC_OK && (inspect_source || inspect_bytes)) {
         UmcProgramInfo info;
         status = umc_inspect(instructions, count, &info, &diagnostic);

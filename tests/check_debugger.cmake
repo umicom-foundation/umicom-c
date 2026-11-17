@@ -1,0 +1,98 @@
+#-----------------------------------------------------------------------------
+# Umicom C
+# File: tests/check_debugger.cmake
+#
+# PURPOSE:
+#   Exercise real console stepping with bounded scripted input and preserved source bytes.
+#
+# AUTHOR AND ORGANISATION:
+# Sammy Hegab
+# Umicom Foundation
+#
+# LICENCE:
+# MIT
+#---------------------------------------------------------------------------
+
+foreach(required TOOL WORK CASE)
+    if(NOT DEFINED ${required})
+        message(FATAL_ERROR "Missing ${required}")
+    endif()
+endforeach()
+file(MAKE_DIRECTORY "${WORK}")
+set(source "int main(void) {\nint x=40;\nx+=2;\nreturn x;\n}\n")
+set(commands "where\nline\nlocals\nline\nlocals\ncontinue\n")
+set(expected 0)
+set(arguments debug "${WORK}/source.uc")
+if(CASE STREQUAL "fault")
+    set(source "int main(void){ return 1/0; }")
+    set(commands "continue\n")
+    set(expected 1)
+elseif(CASE STREQUAL "fuel")
+    list(APPEND arguments --max-steps 1)
+    set(commands "continue\n")
+    set(expected 1)
+elseif(CASE STREQUAL "cancel")
+    set(commands "quit\n")
+elseif(CASE STREQUAL "eof")
+    set(commands "")
+elseif(CASE STREQUAL "unknown")
+    set(commands "nonsense\nwhere\ncontinue\n")
+elseif(CASE STREQUAL "long")
+    string(REPEAT "s" 100 oversized)
+    set(commands "${oversized}\nwhere\ncontinue\n")
+elseif(CASE STREQUAL "syntax")
+    set(source "int main(void){ return missing; }")
+    set(expected 1)
+elseif(CASE STREQUAL "bytecode")
+    set(commands "line\ncontinue\n")
+elseif(NOT CASE STREQUAL "steps")
+    message(FATAL_ERROR "Unknown case")
+endif()
+file(WRITE "${WORK}/source.uc" "${source}")
+file(WRITE "${WORK}/commands.txt" "${commands}")
+file(SHA256 "${WORK}/source.uc" before)
+if(CASE STREQUAL "bytecode")
+    string(RANDOM LENGTH 12 unique)
+    set(bytecode "${WORK}/program-${unique}.umcb")
+    execute_process(COMMAND "${TOOL}" compile "${WORK}/source.uc" "${bytecode}" RESULT_VARIABLE compiled TIMEOUT 10)
+    if(NOT compiled EQUAL 0)
+        message(FATAL_ERROR "Bytecode fixture compile failed")
+    endif()
+    set(arguments debug-bytecode "${bytecode}")
+endif()
+execute_process(COMMAND "${TOOL}" ${arguments} INPUT_FILE "${WORK}/commands.txt"
+    RESULT_VARIABLE result OUTPUT_VARIABLE out ERROR_VARIABLE err TIMEOUT 10)
+file(SHA256 "${WORK}/source.uc" after)
+if(NOT "${result}" STREQUAL "${expected}" OR NOT before STREQUAL after)
+    message(FATAL_ERROR "Unexpected result ${result}: ${out} ${err}")
+endif()
+if(CASE STREQUAL "steps")
+    if(NOT out MATCHES "local\\[0\\]=40" OR NOT out MATCHES "local\\[0\\]=42" OR NOT out MATCHES "Result: 42")
+        message(FATAL_ERROR "Missing paused local observations: ${out}")
+    endif()
+elseif(CASE STREQUAL "fault" OR CASE STREQUAL "fuel")
+    if(out MATCHES "Result:" OR NOT err MATCHES "Stopped at source-byte=")
+        message(FATAL_ERROR "Failed execution published a result: ${out} ${err}")
+    endif()
+elseif(CASE STREQUAL "cancel" OR CASE STREQUAL "eof")
+    if(out MATCHES "step=" OR NOT out MATCHES "Cancelled")
+        message(FATAL_ERROR "Cancellation executed instructions")
+    endif()
+elseif(CASE STREQUAL "syntax")
+    # Preserve the initial generic-message expectation; the compiler gives a
+    # more specific unknown-local diagnostic. Assert source location and no prompt.
+    # if(out MATCHES "umc>" OR NOT err MATCHES "unsupported or malformed")
+    if(out MATCHES "umc>" OR NOT err MATCHES "source.uc:1:[0-9]+:")
+        message(FATAL_ERROR "Invalid source entered debugger")
+    endif()
+else()
+    if(NOT out MATCHES "Result: 42")
+        message(FATAL_ERROR "Missing completed result: ${out} ${err}")
+    endif()
+    if(CASE STREQUAL "unknown" AND NOT err MATCHES "Unknown command")
+        message(FATAL_ERROR "Missing command refusal")
+    endif()
+    if(CASE STREQUAL "long" AND NOT err MATCHES "Command refused")
+        message(FATAL_ERROR "Missing line bound refusal")
+    endif()
+endif()

@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Umicom C · From source to safe feedback</title>
+<link rel="icon" href="assets/branding/umicom.ico">
+<style>
+:root{color-scheme:light;--ink:#132338;--blue:#17699a;--line:#c7d5e1;--paper:#fff}
+*{box-sizing:border-box}body{margin:0;background:#eef3f8;color:var(--ink);font:18px/1.65 "Segoe UI Variable Text","Segoe UI",Arial,sans-serif}
+header,main,footer{max-width:1120px;margin:auto;padding:28px}header{display:flex;gap:28px;align-items:center}header img{width:210px;height:auto}
+main{background:var(--paper);border:1px solid var(--line);border-radius:14px}h1{font-size:2.25rem;line-height:1.2}h2{color:var(--blue);margin-top:2.3rem}
+a{color:#125a88}code,pre{font-family:"Cascadia Code",Consolas,monospace}pre{padding:18px;background:#edf3f8;border:1px solid var(--line);overflow:auto}
+table{border-collapse:collapse;width:100%;font-size:.95rem}th,td{padding:12px;border:1px solid var(--line);text-align:left;vertical-align:top}th{background:#e5eef6}
+.note{border-left:5px solid var(--blue);padding:12px 18px;background:#f2f7fb}.flow{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:24px 0}.flow div{background:#e5eef6;border:1px solid var(--line);padding:12px;border-radius:8px;flex:1;min-width:145px}.flow small{display:block}
+nav ol{columns:2}section{scroll-margin-top:20px}@media(max-width:650px){header{display:block}nav ol{columns:1}main{border-radius:0;padding:18px}h1{font-size:1.8rem}}
+</style></head><body>
+<header><img src="assets/branding/umicom-logo.svg" alt="Umicom"><p>Umicom C<br>Compiler and runtime learning series</p></header>
+<main><h1>From source code to useful feedback</h1>
+<p>This short course introduces compilers, interpreters, bytecode and garbage collection through the code currently available in Umicom C. You need no previous compiler knowledge. The practical sections assume Windows PowerShell, a text editor, CMake, Ninja and a C23-capable GCC installation. Use the existing <a href="execution-guide.md">build guide</a> to establish those tools first.</p>
+<p class="note">Umicom C currently implements a bounded integer language shaped like C. It is not a complete C23 compiler, Java implementation or BASIC compiler. A successful example demonstrates its documented subset, not an entire application platform.</p>
+<nav aria-label="Lessons"><ol><li><a href="#words">Source, machines and compilation</a></li><li><a href="#feedback">Catch mistakes early</a></li><li><a href="#step">Step through a program</a></li><li><a href="#bytecode">Understand bytecode</a></li><li><a href="#memory">Understand collection</a></li><li><a href="#languages">Mixing languages carefully</a></li><li><a href="#measure">Measure the development loop</a></li></ol></nav>
+
+<section id="words"><h2>1. Source, machines and compilation</h2>
+<p>A source file is text describing a computation. The CPU executes machine instructions, which are numeric encodings understood by a particular processor. Assembly language gives human-readable names to those instructions. A compiler translates source into another representation. It may emit machine code directly; a separate text assembly file is not compulsory.</p>
+<div class="flow" role="img" aria-label="Source is parsed into checked instructions, then executed by a virtual machine or translated to native machine code.">
+<div>Source text<small>Names and expressions</small></div><span aria-hidden="true">→</span><div>Frontend<small>Grammar and meaning</small></div><span aria-hidden="true">→</span><div>Checked representation<small>Operations and types</small></div><span aria-hidden="true">→</span><div>Execution<small>VM or native backend</small></div></div>
+<p>An interpreter executes a representation of the program. A virtual machine, or VM, defines a software instruction set. It need not emulate a complete computer. Umicom's current VM works with checked signed integers and bounded storage. The host compiler builds the VM itself into a native executable.</p>
+<p><a href="https://bellard.org/tcc/tcc-doc.html">TinyCC</a> demonstrates a different useful route: rapidly compile C into native code and execute it through a command or embeddable library. Its compile-and-run behavior is not bytecode interpretation. Its documented C support must be checked independently from Umicom's C23 goals.</p>
+<p><a href="https://github.com/freebasic/fbc">FreeBASIC</a> illustrates the separation of a language compiler, runtime libraries and declarations for other libraries. We can learn from that architecture without copying its implementation. A runtime supplies operations the generated program needs; a different source syntax does not eliminate that need.</p>
+<p><strong>Exercise:</strong> Explain why a Windows executable cannot simply be copied into a freestanding RISC-V Kernel and run. <strong>Answer:</strong> processor instructions, executable format and available system services can all differ.</p></section>
+
+<section id="feedback"><h2>2. Catch mistakes before a full build</h2>
+<p>A build commonly includes preprocessing, compilation and linking. Preprocessing handles directives such as includes; compilation checks and translates individual source units; linking resolves references between object files and libraries. Packaging, installation and tests add more work. Measure which stage takes hours before replacing the compiler.</p>
+<p>Create a scratch folder. In a text editor save this as <code>early.c</code>. The semicolon is deliberately missing.</p>
+<pre><code>int main(void) {
+    return 42
+}</code></pre>
+<p>Open PowerShell in that folder. A command is an instruction to a tool. The following command asks GCC to check C23 syntax and issue common warnings without generating an executable:</p>
+<pre><code>gcc -std=c23 -Wall -Wextra -Wpedantic -fsyntax-only early.c</code></pre>
+<p>Expect a diagnostic near the closing brace or return statement. Add the missing semicolon and rerun. The command should finish without that diagnostic. Exact wording depends on the compiler. If PowerShell cannot find gcc, repair the toolchain PATH using the setup guide before proceeding.</p>
+<p><a href="https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html">GCC documents these diagnostic options</a>. A syntax-only pass does not link libraries or exercise code. In a real project it needs the same include paths, macros, language standard and target options as the normal build. Reuse the project's compilation settings; a bare command on a complex Framework source may only report missing configuration.</p>
+<table><thead><tr><th>Check</th><th>Useful evidence</th><th>Still missing</th></tr></thead><tbody>
+<tr><td>Syntax and warnings</td><td>Many grammar/type mistakes</td><td>Link failures and executed behavior</td></tr>
+<tr><td>Affected target build</td><td>Compilation and linking of that target</td><td>Unrelated targets and all runtime paths</td></tr>
+<tr><td>Focused tests</td><td>Specified behavior on exercised cases</td><td>Untested inputs and integration</td></tr>
+<tr><td>Sanitizer execution</td><td>Selected memory faults on paths actually run</td><td>Proof of absence of defects</td></tr>
+<tr><td>Release qualification</td><td>The complete configured product workflow</td><td>Other platforms not exercised</td></tr></tbody></table>
+<p><a href="https://clang.llvm.org/docs/AddressSanitizer.html">AddressSanitizer</a> is a separate native instrumentation route. Use it in a compatible toolchain and run meaningful inputs. Merely enabling a flag is not evidence that no leak or memory error exists.</p></section>
+
+<section id="step"><h2>3. Step through a small program</h2>
+<p>Save this complete program as <code>lesson.uc</code> in your Umicom C working directory:</p>
+<pre><code>int main(void) {
+    int answer = 40;
+    answer += 2;
+    return answer;
+}</code></pre>
+<p><code>int</code> declares an integer. <code>answer</code> names a value. <code>+= 2</code> adds two and stores the result. <code>return</code> completes this program with a result. Braces group statements; semicolons terminate them.</p>
+<ol><li>Build the CLI using the <a href="interactive-debugging.md">debugger guide</a>.</li>
+<li>Run <code>./build/debug/bin/umicom-c.exe check lesson.uc</code>. Check reports source admission; it does not execute the return value.</li>
+<li>Run <code>./build/debug/bin/umicom-c.exe debug lesson.uc</code>.</li>
+<li>Type <code>where</code>, then <code>step</code>. Observe one operation.</li>
+<li>Type <code>line</code>, then <code>locals</code>. Repeat to observe the slot change.</li>
+<li>Type <code>continue</code>. Expect <code>Result: 42</code>.</li></ol>
+<p>A source line can produce several VM operations. The line command groups physical source coordinates rather than complete C statements. The debugger compiles the whole input before beginning; it does not incrementally accept new C declarations at the prompt.</p>
+<p>Now replace the return expression with <code>answer / 0</code>. The source may compile, but execution stops on division by zero. A failed step leaves machine state unchanged. Read the diagnostic before looking for a result. Use <code>quit</code> to cancel a paused session without completing it.</p></section>
+
+<section id="bytecode"><h2>4. Compile once into bytecode</h2>
+<p>Bytecode is a defined sequence of VM operations. Unlike a host C structure written directly to disk, a portable wire format specifies its layout and rejects unsupported versions. Umicom's decoder checks the bounded program before execution.</p>
+<pre><code>./build/debug/bin/umicom-c.exe compile lesson.uc lesson.umcb
+./build/debug/bin/umicom-c.exe inspect-bytecode lesson.umcb
+./build/debug/bin/umicom-c.exe debug-bytecode lesson.umcb</code></pre>
+<p>Use a new output filename if an artifact already exists; preserve old results for comparison. Bytecode stores source offsets but not the entire source text. Without source text, line stepping falls back to one instruction. Read <a href="bytecode.md">the wire format</a> before designing an interchange tool.</p>
+<p>A JVM-style design needs more than compact instructions: verification, typed values, call frames, exceptions, references and library contracts must agree. The <a href="https://docs.oracle.com/javase/specs/jvms/se25/html/jvms-2.html">JVM specification</a> is a useful architectural reference, not a claim that Umicom implements the JVM.</p>
+<p><strong>Exercise:</strong> Can a bytecode pass prove a native GTK window will open? <strong>Answer:</strong> no. The bounded VM does not execute the GTK runtime or its platform dependencies.</p></section>
+
+<section id="memory"><h2>5. Why collection needs ownership rules</h2>
+<p>Memory is storage. A native C pointer refers to an address; losing track of its lifetime can lead to stale access. A managed handle is an identifier checked by an arena. The new optional heap has 32 bounded objects, each with payload bytes and explicit references.</p>
+<p>A root identifies an object the caller still needs. Marking follows references from roots. Sweeping clears unreachable objects. Two objects that point to each other still become collectible when neither is reachable from a root.</p>
+<ol><li>Read <a href="../examples/managed_cycle.c">managed_cycle.c</a>.</li><li>Locate the two allocations and check the error handling.</li><li>Find the two edges forming a cycle.</li><li>Find collection with one root: zero objects are collected.</li><li>Find collection with no roots: two are collected.</li><li>Find the old-handle read: it must be refused.</li></ol>
+<p>Run the example through the commands in <a href="managed-objects.md">managed objects</a>. This is a separate native SDK library. The integer VM has no managed-object instructions yet. A collector cannot automatically repair arbitrary C pointer arithmetic, close files, release GPU allocations or make an omitted root safe.</p></section>
+
+<section id="languages"><h2>6. Tags select a language, not its semantics</h2>
+<p>The experimental scanner recognizes <code>&lt;?java ... ?&gt;</code>, <code>&lt;?basic ... ?&gt;</code>, <code>&lt;?c23 ... ?&gt;</code> and <code>&lt;?umicom ... ?&gt;</code>. Run:</p>
+<pre><code>./build/debug/bin/umicom-c.exe regions examples/language_regions.umc</code></pre>
+<p>Read its classification-only notice. The scanner finds spans; it does not compile these languages. Try the ordinary check command on the same file: rejection is expected. This prevents a display feature being mistaken for executable support.</p>
+<p>Before implementing calls between languages, define integer sizes, string encoding, error propagation and ownership. An application binary interface, or ABI, defines how compiled pieces exchange values and control. Begin with independent modules and a narrow ABI. Java class loading and reflection cannot be preserved by replacing tags with C text. Read <a href="language-regions.md">the envelope contract</a> for scanner limitations.</p></section>
+
+<section id="measure"><h2>7. Make the small development loop measurable</h2>
+<p>Do not rebuild every product after every one-line edit. In a configured CMake tree, build the affected target and run its related tests. Full integration checks still belong before release.</p>
+<pre><code>cmake --build build/debug --target umicom-c-test-machine --parallel 2
+ctest --test-dir build/debug -R "umicom.c.machine" --output-on-failure --no-tests=error</code></pre>
+<p>Record the source revision, changed files, compiler, build type, target, elapsed time and result. Compare the same operation before and after a change. Distinguish a warm incremental build from a clean build; cached inputs can make timings very different.</p>
+<p>TinyCC's public home page contains a historical benchmark using an old GCC release and Pentium 4 hardware. It is not evidence for present-day speedups on Umicom projects. Bytecode can shorten some execution loops, but it does not eliminate preprocessing, frontend work or native integration. Measure each claim.</p>
+<p><strong>Final exercise:</strong> deliberately introduce a syntax error, an execution error and a stale managed handle. Write down which layer catches each. Then explain why passing all three checks still does not certify an entire desktop application.</p></section>
+</main><footer><img src="assets/branding/umicom-icon.svg" alt="" width="32" height="32"> Umicom Foundation · Source examples and capability limits are part of the lesson. Fonts use installed system fallbacks.</footer></body></html>

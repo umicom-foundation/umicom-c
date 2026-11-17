@@ -2,10 +2,12 @@
 
 # Embed the compiler and runtime
 
-An SDK is a library, its public declarations and the metadata needed to link another program to it. Umicom C exports two CMake targets:
+An SDK is a library, its public declarations and the metadata needed to link another program to it. <!-- Earlier two-target description retained: Umicom C exports two CMake targets. -->
+Umicom C exports these CMake targets:
 
 - `UmicomC::Runtime`: diagnostics, bytecode, operation comparison and execution.
-- `UmicomC::Compiler`: the source lexer and parser, linked to Runtime.
+- `UmicomC::Compiler`: the source lexer, parser and region discovery, linked to Runtime.
+- `UmicomC::ManagedHeap`: optional bounded objects and explicit-root collection, separate from the integer VM.
 
 The [installed consumer](../examples/sdk_consumer/main.c) compiles a small source span and executes it. Its [CMake project](../examples/sdk_consumer/CMakeLists.txt) uses `find_package(UmicomC 0.1 CONFIG REQUIRED)`. It does not compile another copy of the SDK.
 
@@ -48,3 +50,7 @@ Use the returned count to limit reads. An earlier longer trace can leave bytes b
 ## Discover the linked component
 
 Include umicom_c/profile.h and use umc_compiler_profile or umc_runtime_profile to query the linked component. [Capability profiles](capability-profiles.md) explains source/runtime distinctions, feature masks, limits and older-library link failures. Existing operation status checks and source identity records remain necessary.
+
+## Paused execution and managed objects
+
+[Interactive debugging](interactive-debugging.md) describes resumable machines. [Managed objects](managed-objects.md) explains the separate collector and its root contract. Neither makes unsupported source constructs executable.

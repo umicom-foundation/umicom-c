@@ -14,6 +14,7 @@
  *---------------------------------------------------------------------------*/
 #include "internal.h"
 #include "umicom_c/trace.h"
+#include "umicom_c/machine.h"
 #include <limits.h>
 
 _Static_assert(UMC_LOCAL_LIMIT == 32U, "Review definite-initialization bitmap when changing local bounds");
@@ -889,6 +890,8 @@ static int64_t bitwise_value(UmcOpcode opcode, int32_t left, int32_t right)
         (int64_t)bits - INT64_C(4294967296);
 }
 
+/* Resumable, ordinary and traced execution now share one checked instruction engine and caller-owned state; this preserves arithmetic and wire behavior. The former implementation is retained for owner review. */
+#if 0
 static UmcStatus execute_validated(const UmcInstruction *program, size_t count,
     size_t fuel, UmcResult *result, UmcTraceStep *steps, size_t *trace_count,
     UmcDiagnostic *diagnostic)
@@ -972,6 +975,170 @@ static UmcStatus execute_validated(const UmcInstruction *program, size_t count,
         pc = next;
     }
     return umc_fail(diagnostic, UMC_BAD_BYTECODE, 0U);
+}
+
+#endif
+/* Admission copies guest instructions into caller-owned storage. The shared
+ * engine never retains a source pointer or allocates a per-step heap object. */
+UmcStatus umc_machine_init(UmcMachine *machine, const UmcInstruction *program,
+    size_t count, size_t fuel, UmcDiagnostic *diagnostic)
+{
+    if (machine == NULL) return umc_fail(diagnostic, UMC_INVALID_ARGUMENT, 0U);
+    UmcStatus status = umc_validate(program, count, diagnostic);
+    if (status != UMC_OK) return status;
+    /* Volatile byte stores avoid an implicit host memset dependency in the
+     * freestanding O0/O2 builds. No caller-controlled pointer survives init. */
+    volatile unsigned char *storage = (volatile unsigned char *)machine;
+    for (size_t i = 0U; i < sizeof *machine; ++i) storage[i] = 0U;
+    for (size_t i = 0U; i < count; ++i) {
+        machine->program[i].opcode = program[i].opcode;
+        machine->program[i].operand = program[i].operand;
+        machine->program[i].source_offset = program[i].source_offset;
+    }
+    machine->frame.count = count;
+    machine->frame.fuel = fuel;
+    return UMC_OK;
+}
+
+static UmcStatus machine_step_validated(const UmcInstruction *program, UmcMachineFrame *machine, UmcTraceStep *step,
+    UmcDiagnostic *diagnostic)
+{
+    if (machine == NULL || machine->count == 0U || machine->count > UMC_PROGRAM_LIMIT ||
+        machine->pc >= machine->count || machine->depth > UMC_STACK_LIMIT ||
+        machine->executed > machine->count || machine->finished != 0U)
+        return umc_fail(diagnostic, UMC_INVALID_ARGUMENT, 0U);
+    UmcStatus status = UMC_OK;
+    const size_t pc = machine->pc;
+    const UmcInstruction *instruction = &program[pc];
+    const UmcOpcode op = instruction->opcode;
+    size_t next = pc + 1U;
+    const size_t need = op == UMC_PUSH || op == UMC_LOAD_LOCAL || op == UMC_JUMP ? 0U :
+        op == UMC_STORE_LOCAL || op == UMC_JUMP_IF_ZERO || op == UMC_RETURN || op == UMC_NEGATE ? 1U : 2U;
+    if (machine->depth < need ||
+        ((op == UMC_PUSH || op == UMC_LOAD_LOCAL) && machine->depth == UMC_STACK_LIMIT) ||
+        (op == UMC_RETURN && machine->depth != 1U) ||
+        (op == UMC_LOAD_LOCAL && (machine->initialized & (UINT32_C(1) << (unsigned)instruction->operand)) == 0U))
+        return umc_fail(diagnostic, UMC_BAD_BYTECODE, instruction->source_offset);
+    if (machine->executed >= machine->fuel) {
+        status = UMC_FUEL_EXHAUSTED;
+    } else if (op == UMC_PUSH) {
+        machine->stack[machine->depth++] = instruction->operand;
+    } else if (op == UMC_LOAD_LOCAL) {
+        machine->stack[machine->depth++] = machine->locals[(size_t)instruction->operand];
+    } else if (op == UMC_STORE_LOCAL) {
+        machine->locals[(size_t)instruction->operand] = machine->stack[--machine->depth];
+        machine->initialized |= UINT32_C(1) << (unsigned)instruction->operand;
+    } else if (op == UMC_JUMP) {
+        next = (size_t)instruction->operand;
+    } else if (op == UMC_JUMP_IF_ZERO) {
+        if (machine->stack[--machine->depth] == 0) next = (size_t)instruction->operand;
+    } else if (op == UMC_RETURN) {
+        machine->finished = 1U;
+    } else if (op == UMC_NEGATE) {
+        if (machine->stack[machine->depth - 1U] == INT32_MIN) status = UMC_ARITHMETIC_ERROR;
+        else machine->stack[machine->depth - 1U] = -machine->stack[machine->depth - 1U];
+    } else {
+            const int32_t right = machine->stack[machine->depth - 1U];
+            const int32_t left = machine->stack[machine->depth - 2U];
+            int64_t value = 0;
+            switch (instruction->opcode) {
+            case UMC_ADD: value = (int64_t)left + (int64_t)right; break;
+            case UMC_SUBTRACT: value = (int64_t)left - (int64_t)right; break;
+            case UMC_MULTIPLY: value = (int64_t)left * (int64_t)right; break;
+            case UMC_BITWISE_AND: case UMC_BITWISE_XOR: case UMC_BITWISE_OR:
+                value = bitwise_value(instruction->opcode, left, right);
+                break;
+            case UMC_REMAINDER:
+                /* C remainder is undefined for zero and the minimum/-1 pair.
+                 * Reject both before executing host arithmetic; failure leaves
+                 * operand machine->depth and caller result unchanged. */
+                if (right == 0 || (left == INT32_MIN && right == -1))
+                    status = UMC_ARITHMETIC_ERROR;
+                else value = left % right;
+                break;
+            case UMC_DIVIDE:
+                if (right == 0 || (left == INT32_MIN && right == -1))
+                    status = UMC_ARITHMETIC_ERROR;
+                else value = left / right;
+                break;
+            /* Native signed comparisons are defined across the whole int32
+             * range. No subtraction is used to compare extreme values. */
+            case UMC_LESS: value = left < right ? 1 : 0; break;
+            case UMC_LESS_EQUAL: value = left <= right ? 1 : 0; break;
+            case UMC_GREATER: value = left > right ? 1 : 0; break;
+            case UMC_GREATER_EQUAL: value = left >= right ? 1 : 0; break;
+            case UMC_EQUAL: value = left == right ? 1 : 0; break;
+            case UMC_NOT_EQUAL: value = left != right ? 1 : 0; break;
+            default: status = UMC_BAD_BYTECODE; break;
+            }
+            /* Widen first, check the range, then publish both value and machine->depth.
+             * Even INT32_MIN squared fits int64_t; signed overflow is never used
+             * as an error detector. Every machine->stack read follows shape validation. */
+            if (status == UMC_OK && (value < INT32_MIN || value > INT32_MAX))
+                status = UMC_ARITHMETIC_ERROR;
+            if (status == UMC_OK) {
+                --machine->depth;
+                machine->stack[machine->depth - 1U] = (int32_t)value;
+            }
+    }
+    if (step != NULL) {
+        size_t written = 0U;
+        record_step(step, &written, pc, instruction, machine->stack, machine->depth, status);
+    }
+    if (status != UMC_OK) return umc_fail(diagnostic, status, instruction->source_offset);
+    machine->pc = next;
+    ++machine->executed;
+    return umc_fail(diagnostic, UMC_OK, 0U);
+}
+
+/* External debugger calls re-admit instruction storage after each pause.
+ * A synchronous whole run validates once and uses the same instruction engine
+ * without rescanning the program for every operation. */
+UmcStatus umc_machine_step(UmcMachine *machine, UmcTraceStep *step,
+    UmcDiagnostic *diagnostic)
+{
+    if (machine == NULL) return umc_fail(diagnostic, UMC_INVALID_ARGUMENT, 0U);
+    const UmcStatus status = umc_validate(machine->program, machine->frame.count, diagnostic);
+    if (status != UMC_OK) return status;
+    return machine_step_validated(machine->program, &machine->frame, step, diagnostic);
+}
+
+static UmcStatus machine_frame_result(const UmcMachineFrame *machine, UmcResult *result,
+    UmcDiagnostic *diagnostic)
+{
+    if (machine == NULL || result == NULL || machine->finished != 1U ||
+        machine->depth != 1U || machine->count == 0U || machine->count > UMC_PROGRAM_LIMIT ||
+        machine->pc != machine->count || machine->executed == 0U ||
+        machine->executed > machine->count || machine->executed > machine->fuel)
+        return umc_fail(diagnostic, UMC_INVALID_ARGUMENT, 0U);
+    result->value = machine->stack[0];
+    result->instructions_executed = machine->executed;
+    return umc_fail(diagnostic, UMC_OK, 0U);
+}
+
+UmcStatus umc_machine_result(const UmcMachine *machine, UmcResult *result,
+    UmcDiagnostic *diagnostic)
+{
+    if (machine == NULL) return umc_fail(diagnostic, UMC_INVALID_ARGUMENT, 0U);
+    return machine_frame_result(&machine->frame, result, diagnostic);
+}
+
+static UmcStatus execute_validated(const UmcInstruction *program, size_t count,
+    size_t fuel, UmcResult *result, UmcTraceStep *steps, size_t *trace_count,
+    UmcDiagnostic *diagnostic)
+{
+    UmcMachineFrame frame;
+    volatile unsigned char *storage = (volatile unsigned char *)&frame;
+    for (size_t i = 0U; i < sizeof frame; ++i) storage[i] = 0U;
+    frame.count = count;
+    frame.fuel = fuel;
+    while (!frame.finished) {
+        UmcTraceStep step;
+        const UmcStatus status = machine_step_validated(program, &frame, steps != NULL ? &step : NULL, diagnostic);
+        if (steps != NULL) steps[(*trace_count)++] = step;
+        if (status != UMC_OK) return status;
+    }
+    return machine_frame_result(&frame, result, diagnostic);
 }
 
 UmcStatus umc_execute(const UmcInstruction *program, size_t count, size_t fuel,

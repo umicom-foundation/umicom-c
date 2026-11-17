@@ -240,6 +240,8 @@ endif()
 # read-only descriptor so a short buffered printf must be explicitly flushed.
 if(TARGET umicom-c AND (WIN32 OR UNIX))
     add_executable(umicom-c-test-report-failure test_cli_report_failure.c)
+# This fixture includes the real CLI entry and must link every hosted command.
+target_sources(umicom-c-test-report-failure PRIVATE ../tools/debugger.c)
     target_link_libraries(umicom-c-test-report-failure PRIVATE UmicomC::Compiler)
     if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(umicom-c-test-report-failure PRIVATE
@@ -500,4 +502,60 @@ if(TARGET umicom-c)
         "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/increment-artifacts"
         -P "${CMAKE_CURRENT_LIST_DIR}/check_cli_increment.cmake")
     set_tests_properties(umicom.c.cli-increment PROPERTIES TIMEOUT 60 LABELS "umicom-c;increment;cli")
+endif()
+
+# Resumable execution uses the same engine as whole runs and traces.
+add_executable(umicom-c-test-machine test_machine.c)
+target_link_libraries(umicom-c-test-machine PRIVATE UmicomC::Compiler)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-machine PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+foreach(case sequence faults fuel refusal parity locals)
+    add_test(NAME "umicom.c.machine.${case}" COMMAND umicom-c-test-machine "${case}")
+    set_tests_properties("umicom.c.machine.${case}" PROPERTIES TIMEOUT 20 LABELS "umicom-c;machine;runtime")
+endforeach()
+
+if(TARGET umicom-c)
+    foreach(case steps fault fuel cancel eof unknown long syntax bytecode)
+        add_test(NAME "umicom.c.debugger.${case}" COMMAND "${CMAKE_COMMAND}"
+            "-DTOOL=$<TARGET_FILE:umicom-c>" "-DCASE=${case}"
+            "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/debugger-${case}"
+            -P "${CMAKE_CURRENT_LIST_DIR}/check_debugger.cmake")
+        set_tests_properties("umicom.c.debugger.${case}" PROPERTIES TIMEOUT 30 LABELS "umicom-c;debugger;cli")
+    endforeach()
+endif()
+
+add_executable(umicom-c-test-managed-heap test_managed_heap.c)
+target_link_libraries(umicom-c-test-managed-heap PRIVATE UmicomC::ManagedHeap)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-managed-heap PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+foreach(case cycle bounds atomic exhausted payload graphs)
+    add_test(NAME "umicom.c.managed-heap.${case}" COMMAND umicom-c-test-managed-heap "${case}")
+    set_tests_properties("umicom.c.managed-heap.${case}" PROPERTIES TIMEOUT 20 LABELS "umicom-c;managed-heap")
+endforeach()
+
+add_executable(umicom-c-test-source-regions test_source_regions.c)
+target_link_libraries(umicom-c-test-source-regions PRIVATE UmicomC::Compiler)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-source-regions PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+foreach(case regions protected malformed bounds)
+    add_test(NAME "umicom.c.source-regions.${case}" COMMAND umicom-c-test-source-regions "${case}")
+    set_tests_properties("umicom.c.source-regions.${case}" PROPERTIES TIMEOUT 20 LABELS "umicom-c;language-regions")
+endforeach()
+
+# Compile the public example as a regression so its documented ownership remains real.
+add_executable(umicom-c-managed-cycle ../examples/managed_cycle.c)
+target_link_libraries(umicom-c-managed-cycle PRIVATE UmicomC::ManagedHeap)
+add_test(NAME umicom.c.managed-heap.example COMMAND umicom-c-managed-cycle)
+set_tests_properties(umicom.c.managed-heap.example PROPERTIES TIMEOUT 15
+    PASS_REGULAR_EXPRESSION "Unrooted cycle collected: 2; old handle refused")
+
+if(TARGET umicom-c)
+    add_test(NAME umicom.c.source-regions.cli COMMAND "${CMAKE_COMMAND}"
+        "-DTOOL=$<TARGET_FILE:umicom-c>" "-DSOURCE=${PROJECT_SOURCE_DIR}/examples/language_regions.umc"
+        "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/language-regions-cli"
+        -P "${CMAKE_CURRENT_LIST_DIR}/check_source_regions.cmake")
+    set_tests_properties(umicom.c.source-regions.cli PROPERTIES TIMEOUT 20 LABELS "umicom-c;language-regions;cli")
 endif()

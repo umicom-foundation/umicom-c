@@ -1,0 +1,29 @@
+/*-----------------------------------------------------------------------------
+ * Umicom C
+ * File: examples/language_regions.umc
+ *
+ * PURPOSE:
+ *   Illustrate language envelopes for classification only; no cross-language execution is provided.
+ *
+ * AUTHOR AND ORGANISATION:
+ * Sammy Hegab
+ * Umicom Foundation
+ *
+ * LICENCE:
+ * MIT
+ *---------------------------------------------------------------------------*/
+
+
+<?umicom
+int main(void) { return 42; }
+?>
+<?c23
+_Static_assert(sizeof(int) >= 2, "integer storage");
+?>
+<?basic
+DIM answer AS INTEGER = 42
+PRINT answer
+?>
+<?java
+class Example { public static void main(String[] args) { System.out.println(42); } }
+?>

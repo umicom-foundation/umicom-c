@@ -1,0 +1,131 @@
+/*-----------------------------------------------------------------------------
+ * Umicom C
+ * File: src/managed_heap.c
+ *
+ * PURPOSE:
+ *   Collect unreachable bounded objects with explicit roots, checked handles and no host allocation.
+ *
+ * AUTHOR AND ORGANISATION:
+ * Sammy Hegab
+ * Umicom Foundation
+ *
+ * LICENCE:
+ * MIT
+ *---------------------------------------------------------------------------*/
+
+#include "umicom_c/managed_heap.h"
+
+static int locate(const UmcManagedHeap *heap,UmcHandle handle,size_t *slot)
+{
+    const uint32_t low=(uint32_t)handle, generation=(uint32_t)(handle>>32);
+    if(low==0U || low>UMC_HEAP_SLOTS || generation==0U)return 0;
+    const size_t index=(size_t)(low-1U);
+    if(heap->objects[index].live!=1U || heap->objects[index].generation!=generation)return 0;
+    *slot=index; return 1;
+}
+static int valid(const UmcManagedHeap *heap)
+{
+    for(size_t i=0;i<UMC_HEAP_SLOTS;++i) {
+        const UmcHeapObject *o=&heap->objects[i];
+        if(o->live>1U || o->length>UMC_HEAP_BYTES || (o->live && o->generation==0U) || (!o->live && o->length))return 0;
+        for(size_t j=0;j<UMC_HEAP_EDGES;++j) {
+            size_t target=0U;
+            if(o->edges[j] && (!o->live || !locate(heap,o->edges[j],&target)))return 0;
+        }
+    }
+    return 1;
+}
+void umc_heap_init(UmcManagedHeap *heap)
+{
+    if(!heap)return;
+    /* Volatile stores keep freestanding initialization independent of libc. */
+    volatile unsigned char *bytes=(volatile unsigned char *)heap;
+    for(size_t i=0;i<sizeof *heap;++i)bytes[i]=0U;
+}
+UmcHeapStatus umc_heap_allocate(UmcManagedHeap *heap,size_t bytes,UmcHandle *handle)
+{
+    if(!heap || !handle)return UMC_HEAP_ARGUMENT;
+    if(bytes>UMC_HEAP_BYTES)return UMC_HEAP_RANGE;
+    if(!valid(heap))return UMC_HEAP_CORRUPT;
+    for(size_t i=0;i<UMC_HEAP_SLOTS;++i) {
+        UmcHeapObject *o=&heap->objects[i];
+        if(o->live || o->generation==UINT32_MAX)continue;
+        ++o->generation; o->length=bytes; o->live=1U;
+        for(size_t j=0;j<UMC_HEAP_BYTES;++j)o->bytes[j]=0U;
+        *handle=((uint64_t)o->generation<<32)|(uint64_t)(i+1U);
+        return UMC_HEAP_OK;
+    }
+    return UMC_HEAP_FULL;
+}
+static UmcHeapStatus admit(const UmcManagedHeap *heap,UmcHandle handle,size_t offset,size_t count,size_t *slot)
+{
+    if(!heap)return UMC_HEAP_ARGUMENT;
+    if(!valid(heap))return UMC_HEAP_CORRUPT;
+    if(!locate(heap,handle,slot))return UMC_HEAP_HANDLE;
+    const size_t length=heap->objects[*slot].length;
+    if(offset>length || count>length-offset)return UMC_HEAP_RANGE;
+    return UMC_HEAP_OK;
+}
+UmcHeapStatus umc_heap_write(UmcManagedHeap *heap,UmcHandle handle,size_t offset,const uint8_t *bytes,size_t count)
+{
+    if(!bytes && count)return UMC_HEAP_ARGUMENT;
+    size_t slot=0U; const UmcHeapStatus status=admit(heap,handle,offset,count,&slot);
+    if(status!=UMC_HEAP_OK)return status;
+    for(size_t i=0;i<count;++i)heap->objects[slot].bytes[offset+i]=bytes[i];
+    return UMC_HEAP_OK;
+}
+UmcHeapStatus umc_heap_read(const UmcManagedHeap *heap,UmcHandle handle,size_t offset,uint8_t *bytes,size_t count)
+{
+    if(!bytes && count)return UMC_HEAP_ARGUMENT;
+    size_t slot=0U; const UmcHeapStatus status=admit(heap,handle,offset,count,&slot);
+    if(status!=UMC_HEAP_OK)return status;
+    for(size_t i=0;i<count;++i)bytes[i]=heap->objects[slot].bytes[offset+i];
+    return UMC_HEAP_OK;
+}
+UmcHeapStatus umc_heap_set_edge(UmcManagedHeap *heap,UmcHandle owner,size_t edge,UmcHandle target)
+{
+    if(!heap)return UMC_HEAP_ARGUMENT;
+    if(edge>=UMC_HEAP_EDGES)return UMC_HEAP_RANGE;
+    if(!valid(heap))return UMC_HEAP_CORRUPT;
+    size_t from=0U,to=0U;
+    if(!locate(heap,owner,&from) || (target && !locate(heap,target,&to)))return UMC_HEAP_HANDLE;
+    heap->objects[from].edges[edge]=target;
+    return UMC_HEAP_OK;
+}
+UmcHeapStatus umc_heap_collect(UmcManagedHeap *heap,const UmcHandle *roots,size_t count,size_t *collected)
+{
+    if(!heap || !collected || (!roots && count))return UMC_HEAP_ARGUMENT;
+    if(count>UMC_HEAP_SLOTS)return UMC_HEAP_RANGE;
+    if(!valid(heap))return UMC_HEAP_CORRUPT;
+    uint32_t marked=0U;
+    size_t pending[UMC_HEAP_SLOTS],used=0U;
+    for(size_t i=0;i<count;++i) {
+        size_t slot=0U;
+        if(!roots[i])continue;
+        if(!locate(heap,roots[i],&slot))return UMC_HEAP_HANDLE;
+        const uint32_t bit=UINT32_C(1)<<(unsigned)slot;
+        if(!(marked&bit)){marked|=bit;pending[used++]=slot;}
+    }
+    /* Mark when enqueued, not when removed: each slot enters once, so even
+     * cycles and duplicate roots cannot overrun the fixed traversal stack. */
+    while(used) {
+        const UmcHeapObject *o=&heap->objects[pending[--used]];
+        for(size_t i=0;i<UMC_HEAP_EDGES;++i) {
+            if(!o->edges[i])continue;
+            size_t slot=0U;
+            (void)locate(heap,o->edges[i],&slot); /* Complete graph admitted above. */
+            const uint32_t bit=UINT32_C(1)<<(unsigned)slot;
+            if(!(marked&bit)){marked|=bit;pending[used++]=slot;}
+        }
+    }
+    size_t freed=0U;
+    for(size_t i=0;i<UMC_HEAP_SLOTS;++i) {
+        UmcHeapObject *o=&heap->objects[i];
+        if(!o->live || (marked&(UINT32_C(1)<<(unsigned)i)))continue;
+        o->live=0U;o->length=0U;
+        for(size_t j=0;j<UMC_HEAP_EDGES;++j)o->edges[j]=0U;
+        for(size_t j=0;j<UMC_HEAP_BYTES;++j)o->bytes[j]=0U;
+        ++freed;
+    }
+    *collected=freed; return UMC_HEAP_OK;
+}

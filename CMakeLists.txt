@@ -28,6 +28,7 @@ add_library(UmicomC::Runtime ALIAS umicom_c_runtime)
 set_target_properties(umicom_c_runtime PROPERTIES EXPORT_NAME Runtime)
 
 add_library(umicom_c_compiler STATIC src/lexer.c src/compiler.c)
+target_sources(umicom_c_compiler PRIVATE src/source_regions.c)
 target_link_libraries(umicom_c_compiler PUBLIC umicom_c_runtime)
 target_compile_features(umicom_c_compiler PUBLIC c_std_23)
 add_library(UmicomC::Compiler ALIAS umicom_c_compiler)
@@ -38,6 +39,7 @@ endif()
 
 if(UMICOM_C_BUILD_TOOLS)
     add_executable(umicom-c tools/main.c)
+    target_sources(umicom-c PRIVATE tools/debugger.c)
     target_link_libraries(umicom-c PRIVATE umicom_c_compiler)
     set_target_properties(umicom-c PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/bin")
     if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
@@ -69,6 +71,19 @@ write_basic_package_version_file("${CMAKE_CURRENT_BINARY_DIR}/UmicomCConfigVersi
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/UmicomCConfig.cmake"
     "${CMAKE_CURRENT_BINARY_DIR}/UmicomCConfigVersion.cmake"
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/UmicomC")
+
+
+# Optional managed objects are separate from native C and the integer VM.
+add_library(umicom_c_managed_heap STATIC src/managed_heap.c)
+add_library(UmicomC::ManagedHeap ALIAS umicom_c_managed_heap)
+target_include_directories(umicom_c_managed_heap PUBLIC
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>" "$<INSTALL_INTERFACE:include>")
+target_compile_features(umicom_c_managed_heap PUBLIC c_std_23)
+set_target_properties(umicom_c_managed_heap PROPERTIES EXPORT_NAME ManagedHeap C_EXTENSIONS OFF)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom_c_managed_heap PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+install(TARGETS umicom_c_managed_heap EXPORT UmicomCTargets ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 
 if(UMICOM_C_BUILD_TESTS)
     include(CTest)
