@@ -121,11 +121,28 @@ static int Refusals(void)
     return 0;
 }
 #endif
+/* Complete shifts now parse; negative-left execution is covered as an arithmetic refusal in the shift suite. The former implementation is retained for owner review. */
+#if 0
 static int Refusals(void)
 {
     const char *bodies[]={"return ~;","return ~=0;","return 1~0;","return ~missing;",
         "int x=1;x~=1;return x;","return ~1u;","return ~1.0;",
         "return ~0&;","return ~0|;","return ~0^;","return ~0<<1;"};
+    for(size_t i=0U;i<sizeof bodies/sizeof bodies[0];++i) {
+        char source[256];int length=snprintf(source,sizeof source,"int main(void){%s}",bodies[i]);
+        CHECK(length>0 && (size_t)length<sizeof source);
+        UmcInstruction p[UMC_PROGRAM_LIMIT];UmcDiagnostic d;size_t n=99U;
+        CHECK(umc_compile(source,(size_t)length,p,UMC_PROGRAM_LIMIT,&n,&d)==UMC_SYNTAX_ERROR && n==0U);
+    }
+    return 0;
+}
+
+#endif
+static int Refusals(void)
+{
+    const char *bodies[]={"return ~;","return ~=0;","return 1~0;","return ~missing;",
+        "int x=1;x~=1;return x;","return ~1u;","return ~1.0;",
+        "return ~0&;","return ~0|;","return ~0^;","return ~0<<;"};
     for(size_t i=0U;i<sizeof bodies/sizeof bodies[0];++i) {
         char source[256];int length=snprintf(source,sizeof source,"int main(void){%s}",bodies[i]);
         CHECK(length>0 && (size_t)length<sizeof source);
@@ -199,7 +216,11 @@ static int Wire(void)
 #if 0
     CHECK(umc_runtime_profile(UMC_PROFILE_WIRE_VERSIONS)==62U);
 #endif
+/* Reflect additive format-7 support without changing complement lowering. The former implementation is retained for owner review. */
+#if 0
     CHECK(umc_runtime_profile(UMC_PROFILE_WIRE_VERSIONS)==126U);
+#endif
+    CHECK(umc_runtime_profile(UMC_PROFILE_WIRE_VERSIONS)==254U);
     return 0;
 }
 static int Native(void)

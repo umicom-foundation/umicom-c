@@ -20,6 +20,15 @@ int main(void)
 {
     const uint32_t features = umc_compiler_profile(UMC_PROFILE_FEATURES);
     static const struct { uint32_t feature; const char *source; int32_t value; } cases[] = {
+        {UMC_FEATURE_COMPOUND_STATEMENTS, "int main(void){int r=0;{int v=42;r=v;}return r;}", 42},
+        {UMC_FEATURE_BRANCH_LOCALS, "int main(void){int result=0;if(1){const int x=42;result=x;}return result;}", 42},
+        {UMC_FEATURE_BOOLEAN_LITERALS, "int main(void){return true ? 42 : false;}", 42},
+        {UMC_FEATURE_DECLARATOR_LISTS, "int main(void){int a=6,b=a*7;return b;}", 42},
+        {UMC_FEATURE_ASCII_CHARACTER_LITERALS, "int main(void){return '*';}", 42},
+        {UMC_FEATURE_EMPTY_STATEMENTS, "int main(void){;{;;};return 42;;}", 42},
+        {UMC_FEATURE_CHECKED_SHIFTS, "int main(void){return 21<<1;}", 42},
+        {UMC_FEATURE_READONLY_LOCALS, "int main(void){const int x=42;return x;}", 42},
+        {UMC_FEATURE_DIGIT_SEPARATORS, "int main(void){return 0x2'A;}", 42},
         {UMC_FEATURE_INCREMENT_STATEMENTS, "int main(void){int x=41;++x;return x;}", 42},
         {UMC_FEATURE_BINARY_BITWISE, "int main(void){return 63&42;}", 42},
         {UMC_FEATURE_BITWISE_COMPLEMENT, "int main(void){return ~(-2147483647-1);}", INT32_MAX},
@@ -73,7 +82,11 @@ int main(void)
 #if 0
     const char unsupported[] = "int main(void){return 1 & 1;}";
 #endif
+/* Keep unsupported-token coverage while shifts become a declared compiler capability. The former implementation is retained for owner review. */
+#if 0
     const char unsupported[] = "int main(void){return 1 << 1;}";
+#endif
+    const char unsupported[] = "int main(void){return 1 <<< 1;}";
     CHECK(umc_compile(unsupported, sizeof unsupported - 1U, program, 8U,
         &count, &diagnostic) == UMC_SYNTAX_ERROR);
     return 0;

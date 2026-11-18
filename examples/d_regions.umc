@@ -1,0 +1,23 @@
+/*-----------------------------------------------------------------------------
+ * Umicom C
+ * File: examples/d_regions.umc
+ *
+ * PURPOSE:
+ *   Demonstrate D envelope classification with protected delimiters; not a compilable mixed-language program.
+ *
+ * AUTHOR AND ORGANISATION:
+ * Sammy Hegab
+ * Umicom Foundation
+ *
+ * LICENCE:
+ * MIT
+ *---------------------------------------------------------------------------*/
+
+<?d
+/+ A comment can contain ?> and <?java without closing this region.
+   /+ A nested comment also contains ?>. +/
++/
+string prompt = r"Show ?> as data, not a closing tag.";
+string other = `Backticks preserve "quotes" and ?>.`;
+int answer = 42;
+?>

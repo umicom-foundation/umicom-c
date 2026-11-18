@@ -168,3 +168,7 @@ Follow [configuration input evidence](configuration-inputs.md) to compare the cu
 ## Compare two sources without execution
 
 Use `umicom-c compare-operations left.uc right.uc` to compare validated opcodes and operands. Exit 0 means identical operations, 1 means different operations, and 2 means the comparison could not be completed. See [operation comparison](operation-comparison.md) for complete examples, diagnostics and why this does not authorize cache reuse.
+
+## Plan fuel before running
+
+[Plan a bytecode instruction budget](path-budgets.md) explains the budget and budget-bytecode commands. These validate and measure structural paths without executing arithmetic. A reported maximum is a sufficient fresh-run instruction allowance, not a promise that runtime arithmetic will succeed.

@@ -475,6 +475,7 @@ static UmcStatus inspect_program(const UmcInstruction *program, size_t count,
         /* Eager bitwise operators have the same two-input stack shape but
          * are not counted as arithmetic operations in the existing report. */
         case UMC_BITWISE_AND: case UMC_BITWISE_XOR: case UMC_BITWISE_OR:
+        case UMC_SHIFT_LEFT: case UMC_SHIFT_RIGHT:
         case UMC_LESS: case UMC_LESS_EQUAL: case UMC_GREATER:
         case UMC_GREATER_EQUAL: case UMC_EQUAL: case UMC_NOT_EQUAL:
             if (depth < 2U) return umc_fail(diagnostic, UMC_BAD_BYTECODE, offset);
@@ -1048,6 +1049,16 @@ static UmcStatus machine_step_validated(const UmcInstruction *program, UmcMachin
             case UMC_BITWISE_AND: case UMC_BITWISE_XOR: case UMC_BITWISE_OR:
                 value = bitwise_value(instruction->opcode, left, right);
                 break;
+            case UMC_SHIFT_LEFT: case UMC_SHIFT_RIGHT:
+                /* Validate before any host shift. Widened multiplication
+                 * reaches at most INT32_MAX * 2^31, which fits int64.
+                 * Publish through the shared range check only on success. */
+                if (left < 0 || right < 0 || right > 31)
+                    status = UMC_ARITHMETIC_ERROR;
+                else if (op == UMC_SHIFT_LEFT)
+                    value = (int64_t)left * (INT64_C(1) << (unsigned)right);
+                else value = (int64_t)left / (INT64_C(1) << (unsigned)right);
+                break;
             case UMC_REMAINDER:
                 /* C remainder is undefined for zero and the minimum/-1 pair.
                  * Reject both before executing host arithmetic; failure leaves
@@ -1121,6 +1132,38 @@ UmcStatus umc_machine_result(const UmcMachine *machine, UmcResult *result,
 {
     if (machine == NULL) return umc_fail(diagnostic, UMC_INVALID_ARGUMENT, 0U);
     return machine_frame_result(&machine->frame, result, diagnostic);
+}
+
+/* Keep instruction semantics in machine_step_validated. One validation walk
+ * per slice bounds admission cost while avoiding a full program rescan for
+ * every instruction in a batch. This is cooperative scheduling, not a timer. */
+UmcStatus umc_machine_run_slice(UmcMachine *machine, size_t instruction_budget,
+    UmcSliceResult *report, UmcTraceStep *last_step, UmcDiagnostic *diagnostic)
+{
+    if (machine == NULL || report == NULL || instruction_budget == 0U ||
+        instruction_budget > UMC_PROGRAM_LIMIT)
+        return umc_fail(diagnostic, UMC_INVALID_ARGUMENT, 0U);
+    UmcStatus status = umc_validate(machine->program, machine->frame.count, diagnostic);
+    if (status != UMC_OK) return status;
+    if (machine->frame.finished != 0U) {
+        UmcResult completed;
+        status = machine_frame_result(&machine->frame, &completed, diagnostic);
+        if (status != UMC_OK) return status;
+        report->instructions_executed = 0U;
+        report->finished = 1U;
+        return UMC_OK;
+    }
+    size_t executed = 0U;
+    while (executed < instruction_budget && machine->frame.finished == 0U) {
+        status = machine_step_validated(machine->program, &machine->frame,
+                                        last_step, diagnostic);
+        if (status == UMC_INVALID_ARGUMENT && executed == 0U) return status;
+        if (status != UMC_OK) break;
+        ++executed;
+    }
+    report->instructions_executed = executed;
+    report->finished = machine->frame.finished;
+    return status;
 }
 
 static UmcStatus execute_validated(const UmcInstruction *program, size_t count,

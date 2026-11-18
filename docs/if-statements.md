@@ -72,7 +72,13 @@ Choose a new artifact filename; compile refuses to overwrite an existing one. Th
 
 ## Keep names and scope explicit
 
+<!-- Earlier scope restriction retained for engineering history:
 Declare every local before the branch that updates it. A body may contain assignments, compound assignments and nested braced if statements. It may be empty. It may not introduce a declaration, return early, contain a standalone nested block or omit its braces. A final return after all top-level statements remains required.
+-->
+<!-- Earlier grammar retained for review:
+Declare a local before using it. A body may contain initialized declarations, assignments, compound assignments, increments and nested braced if statements. It may be empty. A body-local name is unavailable outside that body. A body may not return early, contain a standalone nested block or omit its braces. A final return after all top-level statements remains required.
+-->
+Declare a local before using it. A body may contain initialized declarations, assignments, compound assignments, increments, nested braced if statements and standalone compound statements. It may be empty. A body-local name is unavailable outside that body. A body cannot return early or omit its braces. A final return after all top-level statements remains required. See [standalone scopes](compound-statements.md) for nesting, slot reuse and the shared depth bound.
 
 ~~~c
 int main(void)
@@ -91,7 +97,10 @@ int main(void)
 }
 ~~~
 
+<!-- Earlier scope restriction retained for engineering history:
 There is still one flat local-name scope. Restricting declarations to the top-level statement sequence avoids implying branch-local scope or permitting a new name to be read on a path that never initialized it. The runtime independently validates slot initialization over every structural path before execution.
+-->
+Conditional bodies now have lexical local-name scopes. On leaving a body, the compiler restores the count of visible outer names. Later disjoint bodies may reuse those slots, but cannot read names from an earlier body. Shadowing an active name is refused. The runtime independently validates slot initialization over every structural path before execution. See [branch-local scope](branch-local-scope.md) for the distinction between name visibility and storage.
 
 The words **if** and **else** are now reserved whole keywords. Names such as **if_value** and **elsewhere** remain valid. A previous experimental profile could scan these words as ordinary identifiers; rename such locals when adopting this grammar. Standard C also reserves these keywords.
 

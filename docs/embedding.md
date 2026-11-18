@@ -9,7 +9,7 @@ Umicom C exports these CMake targets:
 - `UmicomC::Compiler`: the source lexer, parser and region discovery, linked to Runtime.
 - `UmicomC::ManagedHeap`: optional bounded objects and explicit-root collection, separate from the integer VM.
 
-The [installed consumer](../examples/sdk_consumer/main.c) compiles a small source span and executes it. Its [CMake project](../examples/sdk_consumer/CMakeLists.txt) uses `find_package(UmicomC 0.1 CONFIG REQUIRED)`. It does not compile another copy of the SDK.
+The [installed consumer](../examples/sdk_consumer/main.c) compiles a small source span and executes it. Its [CMake project](../examples/sdk_consumer/CMakeLists.txt) now requests `find_package(UmicomC 0.1 CONFIG REQUIRED COMPONENTS Compiler)`. <!-- Earlier discovery without COMPONENTS remains supported. --> It does not compile another copy of the SDK.
 
 ## Ownership
 
@@ -54,3 +54,18 @@ Include umicom_c/profile.h and use umc_compiler_profile or umc_runtime_profile t
 ## Paused execution and managed objects
 
 [Interactive debugging](interactive-debugging.md) describes resumable machines. [Managed objects](managed-objects.md) explains the separate collector and its root contract. Neither makes unsupported source constructs executable.
+
+## Request the SDK capability you actually use
+
+A CMake package is located by `find_package`. A component names a capability requested from that package. An imported target then carries the include directories, libraries and transitive dependencies needed by the consumer. These are different roles: finding a directory is not a successful link or a verified executable.
+
+~~~cmake
+find_package(UmicomC 0.1 CONFIG REQUIRED COMPONENTS Compiler)
+target_link_libraries(my_tool PRIVATE UmicomC::Compiler)
+~~~
+
+The component names are exactly `Compiler`, `Runtime` and `ManagedHeap`, matching the target suffixes above. Names are case-sensitive. Request `Runtime` when a host only executes reviewed bytecode; request `Compiler` when it also parses source. Compiler already links the runtime transitively, so consumers do not need to duplicate that link declaration.
+
+An unavailable required component makes package discovery fail. An unavailable `OPTIONAL_COMPONENTS` entry has a false per-component result without rejecting otherwise satisfied required components. Check that result before referencing an optional target. A misspelled component must not silently select something similar.
+
+The package-component regressions configure the real package template with import-only fixture targets. This verifies discovery behavior, including a later valid request after a quiet refusal. It does not build or install archives. Separately configure, build and run the installed consumer against a matching SDK before claiming installation and binary compatibility are qualified.

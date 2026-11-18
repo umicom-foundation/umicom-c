@@ -59,15 +59,32 @@ static int refusals(void)
 #if 0
         "int x=0;if(1){x=1;}else if(0){x=2;}return x;",
 #endif
+/* These formerly unsupported declarations are now positive branch-scope
+ * cases in test_branch_locals.c. Preserve the former rejection fixtures. */
+#if 0
         "if(1){int x=1;}return 0;", "int x=1;if(0){int y=2;}return x;",
+#endif
         "int x=1;if(x=2){x=3;}return x;", "int x=1;if(){x=2;}return x;",
         "int x=1;if(x){missing=2;}return x;", "int x=1;if(0){x=missing;}return x;",
         "int x=1;else{x=2;}return x;", "int x=1;if(1){x=2;}else{}else{}return x;",
         "int x=1;if(1){x=2;return x;", "int x=1;if(1){x=2;}return x;else{}",
         "int if=1;return if;", "int else=1;return else;",
-        "int x=1;if(1){{x=2;}}return x;", "int x=1;if(1){;}return x;",
+        /* Standalone blocks are now valid. Keep the old expectation here
+         * for review; test_compound_statements.c executes this exact source. */
+#if 0
+        "int x=1;if(1){{x=2;}}return x;",
+#endif
+        /* Empty statements now use the common statement dispatcher. Preserve
+         * the old refusal; test_empty_statements.c executes this exact body. */
+#if 0
+        "int x=1;if(1){;}return x;",
+#endif
         "int x=1;if(1){x=2;}else{}",
+        /* Else-body declarations now use the same scoped declaration path.
+         * The old refusal is retained; test_branch_locals verifies its value. */
+#if 0
         "int x=1;if(0){x=2;}else{int y=3;}return x;"
+#endif
     };
     for (size_t i=0U;i<sizeof cases/sizeof cases[0];++i) {
         char text[512]; int length=snprintf(text,sizeof text,"int main(void){%s}",cases[i]);

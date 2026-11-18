@@ -1,0 +1,25 @@
+/*-----------------------------------------------------------------------------
+ * Umicom C
+ * File: examples/basic_block_comments.umc
+ *
+ * PURPOSE:
+ *   Demonstrate nested BASIC comment envelopes without claiming foreign-language execution.
+ *
+ * AUTHOR AND ORGANISATION:
+ * Sammy Hegab
+ * Umicom Foundation
+ *
+ * LICENCE:
+ * MIT
+ *---------------------------------------------------------------------------*/
+
+
+<?basic
+/' Outer comment: these ?> and <?java markers are ordinary text.
+   /' Nested comment: another ?> stays inside the outer comment. '/
+   The quoted text "not a string" does not create a string state here.
+'/
+DIM amount AS /' This comment crosses
+                    a physical line without ending the statement. '/ INTEGER
+PRINT amount
+?>

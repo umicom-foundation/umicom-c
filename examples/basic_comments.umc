@@ -1,0 +1,24 @@
+/*-----------------------------------------------------------------------------
+ * Umicom C
+ * File: examples/basic_comments.umc
+ *
+ * PURPOSE:
+ *   Demonstrate protected BASIC comment delimiters in a classification-only source envelope.
+ *
+ * AUTHOR AND ORGANISATION:
+ * Sammy Hegab
+ * Umicom Foundation
+ *
+ * LICENCE:
+ * MIT
+ *---------------------------------------------------------------------------*/
+
+
+<?basic
+  REM The next symbols stay inside this comment: ?> <?java
+  PRINT 42 : rEm Another comment containing ?>
+  PRINT "REM ?> is quoted text"
+?>
+<?umicom
+int main(void) { return 42; }
+?>

@@ -65,6 +65,26 @@ typedef enum UmcProfileProperty {
 #define UMC_FEATURE_BINARY_BITWISE UINT32_C(65536)
 /* Standalone initialized-local ++/-- lowers to existing slot/arithmetic records. */
 #define UMC_FEATURE_INCREMENT_STATEMENTS UINT32_C(131072)
+/* Source spelling only; the runtime continues to execute ordinary PUSH values. */
+#define UMC_FEATURE_DIGIT_SEPARATORS UINT32_C(262144)
+/* Source qualifier and write admission only; no immutable runtime storage. */
+#define UMC_FEATURE_READONLY_LOCALS UINT32_C(524288)
+/* Initialized names scoped to if/else bodies; existing local/branch bytecode. */
+#define UMC_FEATURE_BRANCH_LOCALS UINT32_C(1048576)
+/* Standalone braced source scopes use existing initialized local operations. */
+#define UMC_FEATURE_COMPOUND_STATEMENTS UINT32_C(2097152)
+/* Optional lexical source report; no execution or runtime warning state. */
+#define UMC_FEATURE_SOURCE_WARNINGS UINT32_C(4194304)
+/* Checked nonnegative shift expressions/runtime operations use format 7. */
+#define UMC_FEATURE_CHECKED_SHIFTS UINT32_C(8388608)
+/* Standalone semicolons are source grammar only; no runtime NOP is emitted. */
+#define UMC_FEATURE_EMPTY_STATEMENTS UINT32_C(16777216)
+/* ASCII character spelling lowers to integer PUSH; compiler only. */
+#define UMC_FEATURE_ASCII_CHARACTER_LITERALS UINT32_C(33554432)
+/* Initialized declaration lists change grammar, not runtime operations. */
+#define UMC_FEATURE_DECLARATOR_LISTS UINT32_C(67108864)
+/* Exact true/false source literals lower to integer 1/0; no bool local type. */
+#define UMC_FEATURE_BOOLEAN_LITERALS UINT32_C(134217728)
 
 /* Runtime reports arithmetic/comparison, trace and inspection, program/stack/
  * bytecode limits, and supported wire-version bits (1U << version).

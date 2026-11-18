@@ -161,7 +161,11 @@ static int Malformed(void)
 #if 0
     memcpy(p,literal,sizeof p);p[2].opcode=(UmcOpcode)19;
 #endif
+/* Opcode 22 is now a checked shift. Use an unassigned byte value for generic refusal and keep exact new identities in the shift suite. The former implementation is retained for owner review. */
+#if 0
     memcpy(p,literal,sizeof p);p[2].opcode=(UmcOpcode)22;
+#endif
+    memcpy(p,literal,sizeof p);p[2].opcode=(UmcOpcode)255;
     CHECK(umc_validate(p,4U,&d)==UMC_BAD_BYTECODE);
     return 0;
 }

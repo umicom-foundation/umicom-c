@@ -38,6 +38,19 @@ typedef struct UmcHeapObject {
 typedef struct UmcManagedHeap {
     UmcHeapObject objects[UMC_HEAP_SLOTS];
 } UmcManagedHeap;
+/* Counts describe one admitted graph and the supplied exact root set. Payload
+ * bytes are requested logical lengths, not reserved memory. arena_bytes is
+ * sizeof(UmcManagedHeap), including storage and metadata; it excludes traversal
+ * stack, caller roots, program code and all other process memory. Collection
+ * does not shrink that arena. An unused generation-exhausted slot is retired. */
+typedef struct UmcHeapReport {
+    size_t arena_bytes;
+    size_t live_objects, live_payload_bytes, live_edges;
+    size_t reachable_objects, reachable_payload_bytes;
+    size_t collectable_objects, collectable_payload_bytes;
+    size_t reusable_slots, retired_slots;
+} UmcHeapReport;
+
 /* Initialize a new lifetime before use. Drop every old handle before reinit.
  * One serialized owner; fields are inspectable but not directly mutable.
  * All output/input regions must be valid, disjoint from the heap and one another.
@@ -55,6 +68,13 @@ UmcHeapStatus umc_heap_set_edge(UmcManagedHeap *heap,UmcHandle owner,size_t edge
  * unchanged. Successful collection clears all unreachable payloads and edges.
  * Reused slots advance generation; exhausted generations are never reused. */
 UmcHeapStatus umc_heap_collect(UmcManagedHeap *heap,const UmcHandle *roots,size_t count,size_t *collected);
+/* Read-only collection preview; no allocations or mutations. Root admission
+ * matches collect. Every failure preserves report and heap. Output is disjoint
+ * from heap and roots. Null roots with zero count means no external roots, not
+ * automatic discovery. Zero-length objects still occupy slots. Recompute after
+ * mutation; never use this report as a substitute for supplying complete roots. */
+UmcHeapStatus umc_heap_inspect(const UmcManagedHeap *heap,const UmcHandle *roots,
+    size_t count,UmcHeapReport *report);
 #ifdef __cplusplus
 }
 #endif

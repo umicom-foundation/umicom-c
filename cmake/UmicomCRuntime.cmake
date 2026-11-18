@@ -23,6 +23,8 @@ function(umicom_c_add_runtime target)
         "${runtime_root}/src/vm.c"
         "${runtime_root}/src/bytecode.c")
     target_sources("${target}" PRIVATE "${runtime_root}/src/comparison.c")
+    # Hosted and freestanding clients share the same read-only fuel planner.
+    target_sources("${target}" PRIVATE "${runtime_root}/src/execution_bounds.c")
     target_include_directories("${target}" PUBLIC
         "$<BUILD_INTERFACE:${runtime_root}/include>"
         "$<INSTALL_INTERFACE:include>")

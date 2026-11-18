@@ -140,3 +140,7 @@ The independent format-5 fixture in [test_remainder.c](../tests/test_remainder.c
 ## Binary bitwise admission
 
 Opcodes 19 through 21 require zero reserved operands and two input values. Their result preserves a defined signed 32-bit representation. They consume one instruction of fuel each; a failed admission or exhausted budget cannot publish a completed value. Inspection retains the existing meaning of arithmetic_count, so these operations do not increase that field. Literal format-6 bytes in [test_bitwise.c](../tests/test_bitwise.c) check encoding independently of the encoder, including wrong versions, reserved operands and signed endpoints. See [binary bitwise operators](bitwise.md) for source precedence and consumer profiles.
+
+## Checked shifts and format 7
+
+SHIFT_LEFT=22 and SHIFT_RIGHT=23 append stable identities with zero reserved operands. Each consumes two values and produces one. A program containing either requires canonical format 7; a program without them retains its previous minimum format and bytes. Select the greatest requirement over the entire program, including bitwise records before shifts. Runtime count/domain checks preserve the failed instruction and final-result output. See [checked shifts](checked-shifts.md) for the nonnegative domain and independent transport cases.

@@ -29,7 +29,9 @@ linked implementation, not an authenticated identity or a complete C23 claim.
 Do not point a cache at a second source checkout. Check the hexadecimal and binary feature bits (32 and 64) rather than assuming the entire compiler mask is fixed. The current local, logical, conditional-expression, compound-assignment and conditional-statement implementation reports compiler.features=16103 and runtime.features=411; see [capability profiles](capability-profiles.md). Literal spelling itself adds no runtime opcode. These declarations identify supported behavior, not authenticated binary identity or complete C23 compatibility.
 -->
 <!-- Earlier capability snapshot retained for review: Do not point a cache at a second source checkout. Check the hexadecimal and binary feature bits (32 and 64) rather than assuming the entire compiler mask is fixed. The current local, logical, conditional-expression, compound-assignment and conditional-statement implementation reports compiler.features=65255 and runtime.features=16795; see [capability profiles](capability-profiles.md). Literal spelling itself adds no runtime opcode. These declarations identify supported behavior, not authenticated binary identity or complete C23 compatibility. -->
-Do not point a cache at a second source checkout. Check the hexadecimal and binary feature bits (32 and 64) rather than assuming the entire compiler mask is fixed. The current local, logical, conditional-expression, compound-assignment and conditional-statement implementation reports compiler.features=130791 and runtime.features=82331; see [capability profiles](capability-profiles.md). Literal spelling itself adds no runtime opcode. These declarations identify supported behavior, not authenticated binary identity or complete C23 compatibility.
+<!-- Earlier pre-increment/separator compiler snapshot retained for review: Do not point a cache at a second source checkout. Check the hexadecimal and binary feature bits (32 and 64) rather than assuming the entire compiler mask is fixed. The current local, logical, conditional-expression, compound-assignment and conditional-statement implementation reports compiler.features=130791 and runtime.features=82331; see [capability profiles](capability-profiles.md). Literal spelling itself adds no runtime opcode. These declarations identify supported behavior, not authenticated binary identity or complete C23 compatibility. -->
+Do not point a cache at a second source checkout. Query the hexadecimal and binary feature bits (32 and 64), and the digit-separator bit (262144), from the linked compiler. <!-- Earlier source-feature snapshot retained for review: The current source implementation reports compiler.features=524007 and runtime.features=82331; see [capability profiles](capability-profiles.md). -->
+Inspect the linked implementation’s required source bits and independent runtime features; see [capability profiles](capability-profiles.md). Source spelling changes add no runtime opcode. These declarations describe supported behavior, not authenticated binary identity or complete C23 compatibility.
 
 These complete masks include the separate [checked remainder](remainder.md) extension. Remainder adds opcode 18 and format 5; the example in this guide retains its existing execution and minimal wire format.
 
@@ -77,8 +79,9 @@ Make a separate practice source and change only its return expression.
 
 A radix is the number of digit values in a spelling: 2, 10 or 16 here. Hexadecimal
 accepts A through F in either case. Signs remain separate unary operators.
-Unsigned types, octal, suffixes, digit separators and floating-point forms are
-outside this bounded language. A source file using those features needs a different
+<!-- Earlier restriction retained for grammar history: Unsigned types, octal, suffixes, digit separators and floating-point forms are
+outside this bounded language. -->
+Unsigned types, octal, suffixes and floating-point forms are outside this bounded language. A source file using those features needs a different
 compiler or an explicit rewrite; do not silently reinterpret it.
 
 ## Check before multiplying
@@ -119,3 +122,50 @@ arbitrary older runtime binary.
 <!-- Earlier complete compiler mask statements retained for review before source complement:
 Do not point a cache at a second source checkout. Check the hexadecimal and binary feature bits (32 and 64) rather than assuming the entire compiler mask is fixed. The current local, logical, conditional-expression, compound-assignment and conditional-statement implementation reports compiler.features=32487 and runtime.features=16795; see [capability profiles](capability-profiles.md). Literal spelling itself adds no runtime opcode. These declarations identify supported behavior, not authenticated binary identity or complete C23 compatibility.
 -->
+
+## Group long numbers without changing their value
+
+A digit separator is a single apostrophe between two digits in the same number.
+It helps a person read a long spelling: `1'000` is one thousand and
+`0b1010'1010` is the same value as `0b10101010`. It is not a string, character
+literal, subtraction or a new runtime operation.
+
+1. Open [digit_separators.uc](../examples/digit_separators.uc). It compares
+   hexadecimal `0x2'A` with binary `0b10'1010`.
+2. Read each side as 42. Predict that equality will produce 1.
+3. Run the commands below from the compiler source directory after building.
+4. Inspect the trace. The apostrophes add no instructions: the program still
+   pushes two numbers, compares them and returns.
+
+~~~powershell
+.\build\bin\umicom-c.exe check examples\digit_separators.uc
+.\build\bin\umicom-c.exe run examples\digit_separators.uc --max-steps 4
+.\build\bin\umicom-c.exe compile examples\digit_separators.uc build\separated-example.umcb
+.\build\bin\umicom-c.exe exec build\separated-example.umcb --max-steps 4
+ctest --test-dir build -R "umicom.c.(digit-separators|cli-digit-separators)" --output-on-failure --no-tests=error
+~~~
+
+Choose another output filename if the artifact already exists; the compiler
+refuses to overwrite it. Expect Result: 1 and Instructions: 4 from run and exec.
+
+| Try this spelling | Reason and expected result |
+| --- | --- |
+| `2'147'483'647` | largest admitted literal, still signed 32-bit |
+| `2'147'483'648` | range error; separators do not enlarge the integer |
+| `0'010` | decimal ten; leading zeros do not enable octal |
+| `0x'2A` | syntax error: a separator cannot follow the prefix |
+| `42'` | syntax error: a separator needs a following digit |
+| `4''2` | syntax error: two separators are not two digits |
+| `0b1'2` | syntax error: 2 is not a binary digit |
+| `4' 2` | syntax error: whitespace cannot be inside the number |
+
+The error for a misplaced apostrophe identifies that apostrophe's byte offset.
+A range error identifies the beginning of the number. The lexer checks its input
+length before looking at the next byte. It validates that byte in the current
+radix before skipping the separator, then uses the existing checked multiply/add.
+No allocation, locale conversion or VM change is involved.
+
+The linked compiler advertises `UMC_FEATURE_DIGIT_SEPARATORS` (262144).
+The runtime does not advertise that source-only bit. An old compiler may reject
+this spelling even when its runtime can execute the resulting ordinary integer
+instructions; check the linked implementation, not just a new header.

@@ -26,6 +26,16 @@ static bool digit(unsigned char c)
     return c >= '0' && c <= '9';
 }
 
+
+/* A separator is spelling, not an arithmetic operation. Validate the following
+ * digit in the current radix before skipping the quote, keeping both overflow
+ * checks and source-span admission in the existing integer accumulator. */
+static bool separator_digit(unsigned char c, int32_t base)
+{
+    if (digit(c)) return (int32_t)(c - (unsigned char)'0') < base;
+    return base == 16 && ((c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'));
+}
+
 static bool matches(const char *source, size_t length, const char *word)
 {
     size_t i = 0U;
@@ -48,6 +58,16 @@ static UmcStatus prefixed_integer(UmcLexer *lexer, UmcToken *token,
     int32_t value = 0;
     while (lexer->position < lexer->length) {
         const unsigned char c = (unsigned char)lexer->source[lexer->position];
+
+        if (c == '\'') {
+            if (lexer->position == digits_start ||
+                lexer->length - lexer->position < 2U ||
+                !separator_digit((unsigned char)lexer->source[lexer->position + 1U], base))
+                return umc_fail(diagnostic, UMC_SYNTAX_ERROR, lexer->position);
+            ++lexer->position;
+            continue;
+        }
+
         int32_t part;
         if (digit(c)) part = (int32_t)(c - (unsigned char)'0');
         else if (c >= 'a' && c <= 'f') part = (int32_t)(c - (unsigned char)'a') + 10;
@@ -69,6 +89,77 @@ static UmcStatus prefixed_integer(UmcLexer *lexer, UmcToken *token,
         return umc_fail(diagnostic, UMC_SYNTAX_ERROR, lexer->position);
     token->kind = UMC_TOKEN_INTEGER;
     token->integer = value;
+    return UMC_OK;
+}
+
+
+/* Character spelling is decoded once by the lexer into an ordinary integer.
+ * This explicit ASCII profile avoids host char signedness, locale and execution
+ * encoding assumptions. All lookahead remains inside the borrowed source span. */
+static UmcStatus ascii_character(UmcLexer *lexer, UmcToken *token,
+    UmcDiagnostic *diagnostic, size_t start)
+{
+    if (lexer->position >= lexer->length)
+        return umc_fail(diagnostic, UMC_SYNTAX_ERROR, start);
+    unsigned char c = (unsigned char)lexer->source[lexer->position++];
+    int32_t value = 0;
+    if (c == '\\') {
+        if (lexer->position >= lexer->length)
+            return umc_fail(diagnostic, UMC_SYNTAX_ERROR, start);
+        c = (unsigned char)lexer->source[lexer->position++];
+        switch (c) {
+        case 'a': value = 7; break;
+        case 'b': value = 8; break;
+        case 'f': value = 12; break;
+        case 'n': value = 10; break;
+        case 'r': value = 13; break;
+        case 't': value = 9; break;
+        case 'v': value = 11; break;
+        case '\\': value = 92; break;
+        case '\'': value = 39; break;
+        case '"': value = 34; break;
+        case '?': value = 63; break;
+        case 'x': {
+            const size_t firstDigit = lexer->position;
+            while (lexer->position < lexer->length &&
+                separator_digit((unsigned char)lexer->source[lexer->position], 16)) {
+                const unsigned char part = (unsigned char)lexer->source[lexer->position++];
+                const int32_t digitValue = digit(part) ? (int32_t)(part - '0') :
+                    part >= 'a' ? (int32_t)(part - 'a') + 10 : (int32_t)(part - 'A') + 10;
+                if (value > (127 - digitValue) / 16)
+                    return umc_fail(diagnostic, UMC_LITERAL_RANGE, start);
+                value = value * 16 + digitValue;
+            }
+            if (lexer->position == firstDigit)
+                return umc_fail(diagnostic, UMC_SYNTAX_ERROR, start);
+            break;
+        }
+        default:
+            if (c < '0' || c > '7')
+                return umc_fail(diagnostic, UMC_SYNTAX_ERROR, start);
+            value = (int32_t)(c - '0');
+            for (unsigned digits = 1U; digits < 3U && lexer->position < lexer->length; ++digits) {
+                const unsigned char part = (unsigned char)lexer->source[lexer->position];
+                if (part < '0' || part > '7') break;
+                value = value * 8 + (int32_t)(part - '0');
+                ++lexer->position;
+            }
+            if (value > 127) return umc_fail(diagnostic, UMC_LITERAL_RANGE, start);
+            break;
+        }
+    } else {
+        if (c < 32U || c > 126U || c == '\'')
+            return umc_fail(diagnostic, UMC_SYNTAX_ERROR, start);
+        value = (int32_t)c;
+    }
+    /* Exactly one decoded value is allowed. A second character, a digit after
+     * a three-digit octal escape or a missing quote is never silently ignored. */
+    if (lexer->position >= lexer->length || lexer->source[lexer->position] != '\'')
+        return umc_fail(diagnostic, UMC_SYNTAX_ERROR, start);
+    ++lexer->position;
+    token->kind = UMC_TOKEN_INTEGER;
+    token->integer = value;
+    token->length = lexer->position - start;
     return UMC_OK;
 }
 
@@ -134,6 +225,7 @@ UmcStatus umc_lex_next(UmcLexer *lexer, UmcToken *token, UmcDiagnostic *diagnost
     token->offset = start;
     token->length = 1U;
     token->integer = 0;
+    if (c == '\'') return ascii_character(lexer, token, diagnostic, start);
     /* Explicit prefixes extend the grammar; unprefixed leading-zero tokens
      * continue through the original decimal implementation below. */
     if (c == '0' && lexer->position < lexer->length) {
@@ -145,12 +237,33 @@ UmcStatus umc_lex_next(UmcLexer *lexer, UmcToken *token, UmcDiagnostic *diagnost
     }
     if (digit(c)) {
         int32_t value = (int32_t)(c - (unsigned char)'0');
+        /* Retain the digit-only loop for grammar history. The active loop
+         * below admits quotes only between digits and preserves its checked
+         * decimal value, overflow location and borrowed-source boundary. */
+#if 0
         while (lexer->position < lexer->length &&
                digit((unsigned char)lexer->source[lexer->position])) {
             const int32_t part = (int32_t)(lexer->source[lexer->position] - '0');
             if (value > (INT32_MAX - part) / 10) {
                 return umc_fail(diagnostic, UMC_LITERAL_RANGE, start);
             }
+            value = value * 10 + part;
+            ++lexer->position;
+        }
+#endif
+        while (lexer->position < lexer->length) {
+            const unsigned char next = (unsigned char)lexer->source[lexer->position];
+            if (next == '\'') {
+                if (lexer->length - lexer->position < 2U ||
+                    !separator_digit((unsigned char)lexer->source[lexer->position + 1U], 10))
+                    return umc_fail(diagnostic, UMC_SYNTAX_ERROR, lexer->position);
+                ++lexer->position;
+                continue;
+            }
+            if (!digit(next)) break;
+            const int32_t part = (int32_t)(next - (unsigned char)'0');
+            if (value > (INT32_MAX - part) / 10)
+                return umc_fail(diagnostic, UMC_LITERAL_RANGE, start);
             value = value * 10 + part;
             ++lexer->position;
         }
@@ -168,7 +281,12 @@ UmcStatus umc_lex_next(UmcLexer *lexer, UmcToken *token, UmcDiagnostic *diagnost
         }
         const size_t length = lexer->position - start;
         const char *word = lexer->source + start;
+/* Recognize const only as a complete keyword; longer identifier spellings retain their existing meaning. The former implementation is retained for owner review. */
+#if 0
         if (matches(word, length, "int")) token->kind = UMC_TOKEN_INT;
+#endif
+        if (matches(word, length, "const")) token->kind = UMC_TOKEN_CONST;
+        else if (matches(word, length, "int")) token->kind = UMC_TOKEN_INT;
         else if (matches(word, length, "main")) token->kind = UMC_TOKEN_MAIN;
         else if (matches(word, length, "void")) token->kind = UMC_TOKEN_VOID;
         else if (matches(word, length, "return")) token->kind = UMC_TOKEN_RETURN;
@@ -176,6 +294,14 @@ UmcStatus umc_lex_next(UmcLexer *lexer, UmcToken *token, UmcDiagnostic *diagnost
          * remain ordinary identifiers in the existing bounded name grammar. */
         else if (matches(word, length, "if")) token->kind = UMC_TOKEN_IF;
         else if (matches(word, length, "else")) token->kind = UMC_TOKEN_ELSE;
+        /* Literal spelling belongs to the lexer. Lower complete, case-sensitive
+         * keywords to ordinary integer tokens so execution, source warnings
+         * and portable bytecode keep their existing owners. Longer names are
+         * still identifiers; this does not introduce a typed bool local. */
+        else if (matches(word, length, "true") || matches(word, length, "false")) {
+            token->kind = UMC_TOKEN_INTEGER;
+            token->integer = matches(word, length, "true") ? 1 : 0;
+        }
         /* Non-keywords now form bounded local identifiers. Keep the former
          * keyword-only refusal for review; the parser still controls every use. */
 #if 0
@@ -244,6 +370,8 @@ UmcStatus umc_lex_next(UmcLexer *lexer, UmcToken *token, UmcDiagnostic *diagnost
     case '{': token->kind = UMC_TOKEN_OPEN; break;
     case '}': token->kind = UMC_TOKEN_CLOSE; break;
     case ';': token->kind = UMC_TOKEN_SEMICOLON; break;
+    /* Parsing decides whether this separator belongs to a declaration list. */
+    case ',': token->kind = UMC_TOKEN_COMMA; break;
     /* Remainder uses bounded adjacent lookahead; comments and whitespace
      * cannot combine % and = into an assignment token. */
     case '%':
@@ -294,6 +422,20 @@ UmcStatus umc_lex_next(UmcLexer *lexer, UmcToken *token, UmcDiagnostic *diagnost
     /* Longest-match lookahead stays within the borrowed source span. Unary
      * logical negation is distinct from !=; assignment remains unsupported. */
     case '<': case '>': case '=': case '!': {
+        /* Consume the longest shift token within the borrowed byte span.
+         * A spaced or commented pair cannot become one shift operator. */
+        if ((c == '<' || c == '>') && lexer->position < lexer->length &&
+            lexer->source[lexer->position] == (char)c) {
+            ++lexer->position;
+            token->length = 2U;
+            const bool assignment = lexer->position < lexer->length &&
+                lexer->source[lexer->position] == '=';
+            if (assignment) { ++lexer->position; token->length = 3U; }
+            token->kind = c == '<' ?
+                (assignment ? UMC_TOKEN_SHIFT_LEFT_ASSIGN : UMC_TOKEN_SHIFT_LEFT) :
+                (assignment ? UMC_TOKEN_SHIFT_RIGHT_ASSIGN : UMC_TOKEN_SHIFT_RIGHT);
+            break;
+        }
         const bool paired = lexer->position < lexer->length && lexer->source[lexer->position] == '=';
         /* The earlier profile rejected both unpaired characters. Retain its
          * admission rule for review; the new branch admits only unary !. */

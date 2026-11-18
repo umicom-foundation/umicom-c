@@ -72,7 +72,10 @@ Assignment expressions remain unsupported. Checked remainder and bitwise compoun
 
 ## Choose a group of updates
 
+<!-- Earlier scope restriction retained for engineering history:
 Braced **if** and optional **else** bodies can update initialized locals or contain nested braced conditionals. Conditions run once, only the selected body executes, and both bodies are checked during compilation. The final return remains required; body-local declarations and early returns remain unsupported. Follow [conditional statements](docs/if-statements.md) for exact paths, combined recursion bounds and format-4 qualification.
+-->
+Braced **if** and optional **else** bodies can declare initialized locals, update visible locals or contain nested braced conditionals. A body-local name becomes unavailable after its closing brace. Conditions run once, only the selected body executes, and both bodies are checked during compilation. The final return remains required; early returns and shadowing a currently visible name remain unsupported. Follow [conditional statements](docs/if-statements.md) and [branch-local scope](docs/branch-local-scope.md) for paths, bounds and format-4 behavior.
 
 ## Ordered conditional chains
 
@@ -84,7 +87,8 @@ Use **%** to calculate a signed remainder or **%=** to update an initialized loc
 
 ## Signed unary complement
 
-Unary **~** flips a signed 32-bit value using existing checked arithmetic. Both signed endpoints work without a new bytecode version. Read [signed complement](docs/complement.md) for a five-instruction example, exact fuel, capability queries and consumer checks. Binary bitwise operators, shifts and unsigned types remain outside the language profile.
+Unary **~** flips a signed 32-bit value using existing checked arithmetic. Both signed endpoints work without a new bytecode version. Read [signed complement](docs/complement.md) for a five-instruction example, exact fuel, capability queries and consumer checks. <!-- Earlier unary-only limit retained for review: Binary bitwise operators, shifts and unsigned types remain outside the language profile. -->
+Binary bitwise operators are supported by the separate [bitwise extension](docs/bitwise.md); shifts and unsigned types remain outside the language profile.
 
 ## Standalone updates by one
 
@@ -93,3 +97,38 @@ Use `++value;`, `value++;`, `--value;` or `value--;` on initialized integer loca
 ## Early feedback and paused execution
 
 Use [the seven-lesson execution course](docs/execution-course.html) to learn syntax checking, stepping, bytecode and explicit-root collection. [Interactive debugging](docs/interactive-debugging.md) documents debug and debug-bytecode commands. [Managed objects](docs/managed-objects.md) describes the optional separate handle heap. [Language regions](docs/language-regions.md) documents classification-only tags; BASIC, Java and full C23 compilation remain outside this implementation.
+
+## BASIC statement-comment boundaries
+
+The region-discovery command now protects delimiters inside case-insensitive
+`REM` comments at a BASIC line or colon statement start. The documented keyword
+boundary prevents `Remember` from becoming a comment. This changes lexical
+classification only; BASIC execution and mixed-language compilation remain
+unsupported. See [tagged language regions](docs/language-regions.md) and
+[the complete example](examples/basic_comments.umc).
+
+Use `const int` or `int const` for an initialized local that source code must
+not update. The compiler rejects writes before bytecode execution; see
+[read-only local integers](docs/readonly-locals.md) for a worked example and
+the distinction between a source qualifier and runtime storage.
+
+## Temporary calculation scopes
+
+A standalone braced block can contain initialized temporary locals, updates and
+nested blocks or conditions. Names end at their matching closing brace; active
+outer names cannot be shadowed. Read [compound statements](docs/compound-statements.md)
+for an eight-instruction source/bytecode example, exact fuel, error recovery and
+the distinction between compiler scope and runtime storage. No new VM opcode is needed.
+
+## Optional source warnings
+
+Use `check source.uc --warnings` to report initialized locals whose values are never read in the admitted source. The native `umc_check_source` service shares the existing parser, preserves the caller’s report on failure, and does not execute arithmetic. Read [source warnings](docs/source-warnings.md) for byte positions, scope reuse, exit statuses and the distinction from dead-store analysis.
+
+## Structural instruction budgets
+
+Use budget source.uc or budget-bytecode program.umcb to count the shortest and longest structural paths without executing arithmetic. The shared runtime validates the graph first and considers both conditional alternatives. Read [instruction budgets](docs/path-budgets.md) for exact commands, a four-to-seven-step example and the limits of the estimate.
+
+
+## Boolean literal spellings
+
+Use exact lowercase true and false for integer values 1 and 0 in the bounded expression language. The [Boolean literal walkthrough](docs/boolean-literals.md) explains short-circuit behavior, reserved names, existing wire formats and the distinction from typed bool storage. This adds a compiler feature without changing the VM.

@@ -29,6 +29,8 @@ extern "C" {
 #define UMC_LOGICAL_NOT_PROFILE 1U
 /* Explicit hexadecimal/binary prefixes retain the same signed literal range. */
 #define UMC_PREFIXED_INTEGER_PROFILE 1U
+/* Apostrophes separate digits without changing literal range or wire encoding. */
+#define UMC_DIGIT_SEPARATOR_PROFILE 1U
 #define UMC_LOCAL_INTEGER_PROFILE 1U
 /* Additive source operators and their bounded, forward-only runtime control flow. */
 #define UMC_LOGICAL_CONNECTIVE_PROFILE 1U
@@ -41,6 +43,8 @@ extern "C" {
 #define UMC_BITWISE_COMPLEMENT_PROFILE 1U
 /* Eager signed bitwise operations append format-6 runtime identities. */
 #define UMC_BINARY_BITWISE_PROFILE 1U
+/* Checked nonnegative int32 shifts append format-7 operations. */
+#define UMC_CHECKED_SHIFT_PROFILE 1U
 #define UMC_LOCAL_LIMIT 32U
 #define UMC_IDENTIFIER_LIMIT 63U
 #define UMC_SOURCE_LIMIT 65536U
@@ -50,6 +54,36 @@ extern "C" {
 #define UMC_BYTECODE_HEADER_SIZE 8U
 #define UMC_BYTECODE_RECORD_SIZE 9U
 #define UMC_BYTECODE_LIMIT (UMC_BYTECODE_HEADER_SIZE + UMC_PROGRAM_LIMIT * UMC_BYTECODE_RECORD_SIZE)
+
+/* const int and int const initialize one read-only top-level local. All later
+ * source updates, including prefix/postfix, are refused even in unselected
+ * branches. Initializers may read earlier locals and execute at runtime; this
+ * is not constexpr or a new bytecode storage property. The wire and runtime
+ * retain ordinary local slots. Qualifiers are not repeated, inferred or applied
+ * to the entry function; declaration placement and bounds remain unchanged. */
+#define UMC_READONLY_LOCAL_PROFILE 1U
+
+/* The read-only declaration contract above originally limited placement to
+ * top-level locals. This additive profile also permits initialized int/const
+ * int declarations inside braced if/else bodies. Names cease to be visible at
+ * the matching closing brace; disjoint scopes may reuse names and VM slots.
+ * At most UMC_LOCAL_LIMIT names are simultaneously visible. Shadowing an
+ * active outer name, standalone blocks, early returns and uninitialized
+ * declarations remain unsupported. Runtime storage is not erased at scope
+ * exit, and source names/qualifiers are not encoded in bytecode. */
+#define UMC_BRANCH_LOCAL_PROFILE 1U
+/* Standalone blocks now extend the earlier branch-only contract above. They
+ * use the same initialized declarations and lexical lifetime, including nested
+ * bodies, with one shared parse-depth budget. Braces emit no runtime operation.
+ * Active-name shadowing, early returns and uninitialized declarations remain
+ * unsupported; leaving a scope neither clears a slot nor frees a resource. */
+#define UMC_COMPOUND_STATEMENT_PROFILE 1U
+/* Empty statement spelling does not change instruction or wire identities. */
+#define UMC_EMPTY_STATEMENT_PROFILE 1U
+#define UMC_ASCII_CHARACTER_PROFILE 1U
+#define UMC_DECLARATOR_LIST_PROFILE 1U
+/* true/false are exact source spellings for integer 1/0, not typed bool locals. */
+#define UMC_BOOLEAN_LITERAL_PROFILE 1U
 
 typedef enum UmcStatus {
     UMC_OK = 0,
@@ -85,7 +119,9 @@ typedef enum UmcOpcode {
     /* Append format-5 remainder without renumbering formats 1 through 4. */
     UMC_REMAINDER,
     /* Append format 6; formats 1 through 5 keep their opcode identities. */
-    UMC_BITWISE_AND, UMC_BITWISE_XOR, UMC_BITWISE_OR
+    UMC_BITWISE_AND, UMC_BITWISE_XOR, UMC_BITWISE_OR,
+    /* Append format 7; all earlier identities and structure layouts remain. */
+    UMC_SHIFT_LEFT, UMC_SHIFT_RIGHT
 } UmcOpcode;
 
 typedef struct UmcInstruction {
@@ -119,9 +155,20 @@ void umc_locate_diagnostic(const char *source, size_t length, UmcDiagnostic *dia
  * arithmetic form below remains accepted without changing its wire encoding. */
 /* Unary ! evaluates its operand then compares it with zero. It uses two
  * additional instructions and retains all normal source/depth/stack limits. */
+/* Shift expressions and <<= / >>= statements accept a nonnegative left
+ * operand and a count from 0 through 31. Negative inputs/counts, excessive
+ * counts and a left-shift result above INT32_MAX return UMC_ARITHMETIC_ERROR
+ * during execution without publishing the failed instruction. Right shift
+ * divides by a power of two. This checked subset deliberately excludes
+ * implementation-dependent signed-negative shifts and unsigned C types.
+ * Addition binds more tightly than shifts; shifts bind more tightly than
+ * comparisons and associate left to right. Shifts use wire format 7. */
+
 /* Integer tokens accept decimal, 0x/0X hexadecimal and 0b/0B binary, up to
  * INT32_MAX. Unprefixed leading zeroes remain decimal, not C octal. Signs
- * are unary operations; suffixes, separators and unsigned types are excluded. */
+ * are unary operations; suffixes and unsigned types are excluded. A single
+ * apostrophe may separate adjacent digits of the same radix. */
+/* Historical restriction before separated spelling: separators were excluded. */
 /* Compile: int main(void) { return <signed-32-bit arithmetic expression>; }
  * The output count is zero on failure. Partial instruction bytes may have been
  * written: never execute them after an error. All buffers must be disjoint and

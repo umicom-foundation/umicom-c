@@ -49,15 +49,28 @@ static int refusals(void)
         "int x=0;if(0){}else if(1)x=1;return x;",
         "if(0){}else if(){}return 0;",
         "int x=1;if(0){}else if(x=1){}return x;",
+/* These formerly unsupported declarations are now positive branch-scope
+ * cases in test_branch_locals.c. Preserve the former rejection fixtures. */
+#if 0
         "if(0){}else if(1){int x=2;}return 0;",
+#endif
         "if(0){}else if(1){return 42;}return 0;",
         "if(0){}else if(1){}else if{}return 0;",
         "int x=1;if(1){x=42;}else if(missing){x=7;}return x;",
         "int x=1;if(1){x=42;}else if(0){x=missing;}return x;",
         "if(0){}else{}else if(1){}return 0;",
         "if(0){}else if(1){}else if(0){}",
+        /* Standalone blocks are now valid. Keep the old expectation here
+         * for review; test_compound_statements.c executes this exact source. */
+#if 0
         "int x=1;if(0){}else if(1){{x=2;}}return x;",
+#endif
+
+        /* Empty statements now use the common statement dispatcher. Preserve
+         * the old refusal; test_empty_statements.c executes this exact body. */
+#if 0
         "int x=1;if(0){}else if(1){;}return x;"
+#endif
     };
     for(size_t i=0U;i<sizeof bodies/sizeof bodies[0];++i){
         char text[512];int n=snprintf(text,sizeof text,"int main(void){%s}",bodies[i]);

@@ -31,7 +31,8 @@ cmake --build build/debug --target umicom-c-managed-cycle --parallel 2
 ctest --test-dir build/debug -R "umicom.c.managed-heap" --output-on-failure --no-tests=error
 ~~~
 
-The final example output is **Unrooted cycle collected: 2; old handle refused**. The source is compiled by the host C compiler. It is not a heap program executed by the integer VM.
+<!-- Earlier output description retained for review: The final example output is **Unrooted cycle collected: 2; old handle refused**. -->
+The example still prints **Unrooted cycle collected: 2; old handle refused** and now finishes with **After collection: 32 reusable slots; arena storage unchanged**. The source is compiled by the host C compiler. It is not a heap program executed by the integer VM.
 
 ## Ownership rules
 
@@ -42,3 +43,34 @@ Supply all roots explicitly, at most 32 entries. A handle held only in an unlist
 Keep input/output spans valid and disjoint from the arena. Serialize access. There are no finalizers, weak references, native pointer tracing, moving objects or resource-closing callbacks. Memory collection does not close operating-system files or GPU resources; those need separate ownership.
 
 Before increasing capacity, measure arena size, collection time and target memory limits. Avoid putting an arena on a small Kernel stack. Extend graph-oracle, stale-handle and failure-preservation tests. Collection can reduce some lifetime mistakes; it does not make all native C memory-safe.
+
+## Inspect without collecting
+
+Call **umc_heap_inspect** with the arena, a complete root array, its count and a separate **UmcHeapReport**. A successful call does not change the heap, advance generations or clear data. Invalid arguments, roots or graph metadata leave the report unchanged. A report describes only that serialized snapshot; recompute it after changing roots, edges or objects.
+
+~~~c
+UmcHeapReport report;
+if (umc_heap_inspect(&heap, &first, 1, &report) == UMC_HEAP_OK) {
+    printf("%zu reachable; %zu collectable\n",
+           report.reachable_objects, report.collectable_objects);
+}
+~~~
+
+In the example, the two-object cycle has two reachable objects and none collectable when **first** is a root. With no roots, inspection reports two collectable objects but still leaves them live. The following real collection with **first** as a root retains them, demonstrating that the preview did not collect anything.
+
+| Field | Meaning |
+|---|---|
+| live_objects | Occupied slots, including zero-length objects |
+| live_payload_bytes | Sum of requested lengths, not all reserved storage |
+| live_edges | Non-null reference slots, including repeated targets |
+| reachable_objects / reachable_payload_bytes | Live objects and logical bytes reachable from the supplied roots |
+| collectable_objects / collectable_payload_bytes | Remaining live objects and logical bytes |
+| reusable_slots | Currently unused slots whose generation can still advance |
+| retired_slots | Currently unused slots whose generation is exhausted |
+| arena_bytes | sizeof(UmcManagedHeap), including fixed storage and metadata |
+
+The live, reusable and retired slot counts total 32. Reachable plus collectable counts equal live objects. A live object at the final generation is still live; it becomes retired only after collection. Do not interpret collectable_objects as a promise that all those slots will be reusable afterwards.
+
+**arena_bytes does not shrink after collection.** The caller still owns the same fixed arena. It excludes the traversal stack, root array, program, native allocations and all other process memory. It is not a process memory meter. Inspection uses bounded local working storage and no host allocation. The read-only qualifier does not add synchronization: another thread must not mutate the arena during inspection.
+
+Run the additional report scenarios with **ctest --test-dir build/debug -R "umicom.c.heap-inspection" --output-on-failure --no-tests=error** after building. They cover known graphs, independent transitive closure, null and duplicate roots, invalid handles, zero-length objects and exhausted generations.

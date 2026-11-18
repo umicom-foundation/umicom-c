@@ -64,7 +64,47 @@ endif()
 if(FALSE)
 set(expected "profile.schema=1\ncompiler.api=1\ncompiler.features=130791\ncompiler.source-bytes=65536\ncompiler.instructions=256\ncompiler.parse-depth=64\nruntime.api=1\nruntime.features=82331\nruntime.instructions=256\nruntime.stack-values=64\nruntime.bytecode-bytes=2312\nruntime.wire-versions=126\ncompiler.local-values=32\ncompiler.identifier-bytes=63\nruntime.local-values=32\n")
 endif()
+# Preserve the previous source mask; digit separators add only compiler bit 262144.
+if(FALSE)
 set(expected "profile.schema=1\ncompiler.api=1\ncompiler.features=261863\ncompiler.source-bytes=65536\ncompiler.instructions=256\ncompiler.parse-depth=64\nruntime.api=1\nruntime.features=82331\nruntime.instructions=256\nruntime.stack-values=64\nruntime.bytecode-bytes=2312\nruntime.wire-versions=126\ncompiler.local-values=32\ncompiler.identifier-bytes=63\nruntime.local-values=32\n")
+endif()
+# Preserve the prior source report; const qualification adds only compiler bit 524288.
+if(FALSE)
+set(expected "profile.schema=1\ncompiler.api=1\ncompiler.features=524007\ncompiler.source-bytes=65536\ncompiler.instructions=256\ncompiler.parse-depth=64\nruntime.api=1\nruntime.features=82331\nruntime.instructions=256\nruntime.stack-values=64\nruntime.bytecode-bytes=2312\nruntime.wire-versions=126\ncompiler.local-values=32\ncompiler.identifier-bytes=63\nruntime.local-values=32\n")
+endif()
+# Retain the prior mask: lexical branch scope adds compiler bit 1048576 only.
+if(FALSE)
+set(expected "profile.schema=1\ncompiler.api=1\ncompiler.features=1048295\ncompiler.source-bytes=65536\ncompiler.instructions=256\ncompiler.parse-depth=64\nruntime.api=1\nruntime.features=82331\nruntime.instructions=256\nruntime.stack-values=64\nruntime.bytecode-bytes=2312\nruntime.wire-versions=126\ncompiler.local-values=32\ncompiler.identifier-bytes=63\nruntime.local-values=32\n")
+endif()
+# Preserve the previous source feature mask; standalone scopes add bit 2097152.
+if(FALSE)
+set(expected "profile.schema=1\ncompiler.api=1\ncompiler.features=2096871\ncompiler.source-bytes=65536\ncompiler.instructions=256\ncompiler.parse-depth=64\nruntime.api=1\nruntime.features=82331\nruntime.instructions=256\nruntime.stack-values=64\nruntime.bytecode-bytes=2312\nruntime.wire-versions=126\ncompiler.local-values=32\ncompiler.identifier-bytes=63\nruntime.local-values=32\n")
+endif()
+# Preserve the prior source mask; optional warning reports add a compiler-only bit.
+if(FALSE)
+set(expected "profile.schema=1\ncompiler.api=1\ncompiler.features=4194023\ncompiler.source-bytes=65536\ncompiler.instructions=256\ncompiler.parse-depth=64\nruntime.api=1\nruntime.features=82331\nruntime.instructions=256\nruntime.stack-values=64\nruntime.bytecode-bytes=2312\nruntime.wire-versions=126\ncompiler.local-values=32\ncompiler.identifier-bytes=63\nruntime.local-values=32\n")
+endif()
+# Preserve the format-6 profile; current linked features add checked shifts.
+if(FALSE)
+set(expected "profile.schema=1\ncompiler.api=1\ncompiler.features=8388327\ncompiler.source-bytes=65536\ncompiler.instructions=256\ncompiler.parse-depth=64\nruntime.api=1\nruntime.features=82331\nruntime.instructions=256\nruntime.stack-values=64\nruntime.bytecode-bytes=2312\nruntime.wire-versions=126\ncompiler.local-values=32\ncompiler.identifier-bytes=63\nruntime.local-values=32\n")
+endif()
+# Empty statements add one compiler-only bit; retain the previous output contract.
+if(FALSE)
+set(expected "profile.schema=1\ncompiler.api=1\ncompiler.features=16776935\ncompiler.source-bytes=65536\ncompiler.instructions=256\ncompiler.parse-depth=64\nruntime.api=1\nruntime.features=8470939\nruntime.instructions=256\nruntime.stack-values=64\nruntime.bytecode-bytes=2312\nruntime.wire-versions=254\ncompiler.local-values=32\ncompiler.identifier-bytes=63\nruntime.local-values=32\n")
+endif()
+# ASCII character grammar adds a source-only bit; preserve the previous output.
+if(FALSE)
+set(expected "profile.schema=1\ncompiler.api=1\ncompiler.features=33554151\ncompiler.source-bytes=65536\ncompiler.instructions=256\ncompiler.parse-depth=64\nruntime.api=1\nruntime.features=8470939\nruntime.instructions=256\nruntime.stack-values=64\nruntime.bytecode-bytes=2312\nruntime.wire-versions=254\ncompiler.local-values=32\ncompiler.identifier-bytes=63\nruntime.local-values=32\n")
+endif()
+# Declaration lists add a source-only bit; retain the prior exact CLI contract.
+if(FALSE)
+set(expected "profile.schema=1\ncompiler.api=1\ncompiler.features=67108583\ncompiler.source-bytes=65536\ncompiler.instructions=256\ncompiler.parse-depth=64\nruntime.api=1\nruntime.features=8470939\nruntime.instructions=256\nruntime.stack-values=64\nruntime.bytecode-bytes=2312\nruntime.wire-versions=254\ncompiler.local-values=32\ncompiler.identifier-bytes=63\nruntime.local-values=32\n")
+endif()
+# Boolean literals add a compiler-only spelling bit; preserve the previous report.
+if(FALSE)
+set(expected "profile.schema=1\ncompiler.api=1\ncompiler.features=134217447\ncompiler.source-bytes=65536\ncompiler.instructions=256\ncompiler.parse-depth=64\nruntime.api=1\nruntime.features=8470939\nruntime.instructions=256\nruntime.stack-values=64\nruntime.bytecode-bytes=2312\nruntime.wire-versions=254\ncompiler.local-values=32\ncompiler.identifier-bytes=63\nruntime.local-values=32\n")
+endif()
+set(expected "profile.schema=1\ncompiler.api=1\ncompiler.features=268435175\ncompiler.source-bytes=65536\ncompiler.instructions=256\ncompiler.parse-depth=64\nruntime.api=1\nruntime.features=8470939\nruntime.instructions=256\nruntime.stack-values=64\nruntime.bytecode-bytes=2312\nruntime.wire-versions=254\ncompiler.local-values=32\ncompiler.identifier-bytes=63\nruntime.local-values=32\n")
 if(NOT "${code}" STREQUAL "0" OR NOT output STREQUAL expected OR NOT error STREQUAL "")
     message(FATAL_ERROR "Profile output contract failed: ${code}\n${output}\n${error}")
 endif()

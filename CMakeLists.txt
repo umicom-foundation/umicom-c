@@ -29,6 +29,8 @@ set_target_properties(umicom_c_runtime PROPERTIES EXPORT_NAME Runtime)
 
 add_library(umicom_c_compiler STATIC src/lexer.c src/compiler.c)
 target_sources(umicom_c_compiler PRIVATE src/source_regions.c)
+# Compiler clients share bounded source presentation; the VM stays presentation-free.
+target_sources(umicom_c_compiler PRIVATE src/diagnostic_excerpt.c)
 target_link_libraries(umicom_c_compiler PUBLIC umicom_c_runtime)
 target_compile_features(umicom_c_compiler PUBLIC c_std_23)
 add_library(UmicomC::Compiler ALIAS umicom_c_compiler)

@@ -14,7 +14,10 @@
 #---------------------------------------------------------------------------
 cmake_minimum_required(VERSION 3.24)
 project(UmicomCConsumer LANGUAGES C)
-find_package(UmicomC 0.1 CONFIG REQUIRED)
+# The earlier unconstrained discovery remains for review. This consumer
+# compiles source, so it now requests the exported Compiler capability.
+# find_package(UmicomC 0.1 CONFIG REQUIRED)
+find_package(UmicomC 0.1 CONFIG REQUIRED COMPONENTS Compiler)
 add_executable(umicom-c-consumer main.c)
 target_link_libraries(umicom-c-consumer PRIVATE UmicomC::Compiler)
 include(CTest)

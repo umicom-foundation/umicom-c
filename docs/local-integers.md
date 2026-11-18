@@ -61,9 +61,15 @@ The slot number is assigned in declaration order. It is not a native memory addr
 2. Try assigning to missing. The compiler rejects the undeclared name. Check spelling and declaration order; names are case sensitive.
 3. Add a second declaration of value. It is a duplicate, even if its initializer differs. Assign to the existing name instead.
 4. Run the valid example with --max-steps 7. The last return cannot execute. No result is published; a failed trace records that attempted step.
+<!-- Earlier grammar retained for review:
 5. Add 33 initialized names. The compiler returns UMC_LOCAL_CAPACITY and publishes an instruction count of zero. Split a larger design into a supported host application; this profile does not yet have functions or nested scopes.
+-->
+5. Add 33 initialized names in the same visible scope. The compiler returns UMC_LOCAL_CAPACITY and publishes an instruction count of zero. Separate independent calculations into distinct [lexical blocks](compound-statements.md) when their temporary values do not need overlapping lifetimes. Functions remain unsupported, and nested blocks do not bypass the program instruction limit.
 
+<!-- Earlier grammar retained for review:
 There is no uninitialized declaration, chained assignment, comma declaration, increment operator, array, pointer or standalone nested block. int x=1; is supported; int x; and return x=2; are not. An initializer may use earlier variables, arithmetic, comparison, ! and supported numeric spellings. Checked arithmetic errors still occur during execution.
+-->
+There is no uninitialized declaration, chained assignment, comma declaration, array or pointer. int x=1; is supported; int x; and return x=2; are not. Standalone increment/decrement statements and nested lexical blocks are supported. An initializer may read earlier visible variables using the documented expression operators. Checked arithmetic errors occur during execution; a const write or escaped name is refused during compilation.
 
 ## Understand the storage boundary
 
@@ -90,4 +96,7 @@ Initialized locals also accept `value += amount;`, `value -= amount;`, `value *=
 
 ## Update along a selected path
 
+<!-- Earlier scope restriction retained for engineering history:
 A braced **if** body and its optional braced **else** body may assign to existing locals or nest another conditional. Declare names before these bodies; body-local declarations and early returns are not accepted. Both paths are compiled, but only the selected path executes its arithmetic. This preserves the flat name scope and existing definite-initialization rules. See [conditional statements](if-statements.md) for the branch layout, fuel differences and shared parse-depth budget.
+-->
+A braced **if** body and its optional braced **else** body may declare initialized locals, update visible names or nest another conditional. A new body-local name is visible only after its initializer and before that body ends. Early returns and shadowing an active name remain unsupported. Both paths are compiled, but only the selected path executes its arithmetic. See [conditional statements](if-statements.md) for branch layout and [branch-local scope](branch-local-scope.md) for name lifetime and bounded slot reuse.

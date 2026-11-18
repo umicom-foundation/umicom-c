@@ -59,6 +59,8 @@ const char *umc_opcode_text(UmcOpcode opcode)
     case UMC_BITWISE_AND: return "bitwise-and";
     case UMC_BITWISE_XOR: return "bitwise-xor";
     case UMC_BITWISE_OR: return "bitwise-or";
+    case UMC_SHIFT_LEFT: return "shift-left";
+    case UMC_SHIFT_RIGHT: return "shift-right";
     default: return "invalid";
     }
 }
@@ -190,11 +192,19 @@ uint32_t umc_runtime_profile(UmcProfileProperty property)
     case UMC_PROFILE_API: return UMC_API_VERSION;
     case UMC_PROFILE_FEATURES:
         return UMC_FEATURE_ARITHMETIC | UMC_FEATURE_COMPARISON |
+/* Report runtime shift execution independently from compiler-only spelling. The former implementation is retained for owner review. */
+#if 0
             UMC_FEATURE_EXECUTION_TRACE | UMC_FEATURE_PROGRAM_INSPECTION | UMC_FEATURE_LOCAL_INTEGERS | UMC_FEATURE_FORWARD_BRANCHES | UMC_FEATURE_REMAINDER | UMC_FEATURE_BINARY_BITWISE;
+#endif
+            UMC_FEATURE_EXECUTION_TRACE | UMC_FEATURE_PROGRAM_INSPECTION | UMC_FEATURE_LOCAL_INTEGERS | UMC_FEATURE_FORWARD_BRANCHES | UMC_FEATURE_REMAINDER | UMC_FEATURE_BINARY_BITWISE | UMC_FEATURE_CHECKED_SHIFTS;
     case UMC_PROFILE_PROGRAM_INSTRUCTIONS: return UMC_PROGRAM_LIMIT;
     case UMC_PROFILE_STACK_VALUES: return UMC_STACK_LIMIT;
     case UMC_PROFILE_BYTECODE_BYTES: return UMC_BYTECODE_LIMIT;
+/* Add format 7 to the runtime transfer capability mask. The former implementation is retained for owner review. */
+#if 0
     case UMC_PROFILE_WIRE_VERSIONS: return (UINT32_C(1) << 1U) | (UINT32_C(1) << 2U) | (UINT32_C(1) << 3U) | (UINT32_C(1) << 4U) | (UINT32_C(1) << 5U) | (UINT32_C(1) << 6U);
+#endif
+    case UMC_PROFILE_WIRE_VERSIONS: return (UINT32_C(1) << 1U) | (UINT32_C(1) << 2U) | (UINT32_C(1) << 3U) | (UINT32_C(1) << 4U) | (UINT32_C(1) << 5U) | (UINT32_C(1) << 6U) | (UINT32_C(1) << 7U);
     case UMC_PROFILE_LOCAL_VALUES: return UMC_LOCAL_LIMIT;
     default: return 0U;
     }

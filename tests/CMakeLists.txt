@@ -559,3 +559,299 @@ if(TARGET umicom-c)
         -P "${CMAKE_CURRENT_LIST_DIR}/check_source_regions.cmake")
     set_tests_properties(umicom.c.source-regions.cli PROPERTIES TIMEOUT 20 LABELS "umicom-c;language-regions;cli")
 endif()
+
+# Slices bound scheduling work while retaining lifetime VM fuel.
+add_executable(umicom-c-test-machine-slices test_machine_slices.c)
+target_link_libraries(umicom-c-test-machine-slices PRIVATE UmicomC::Compiler)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-machine-slices PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+foreach(case sizes faults fuel refusal parity)
+    add_test(NAME "umicom.c.machine-slices.${case}" COMMAND umicom-c-test-machine-slices "${case}")
+    set_tests_properties("umicom.c.machine-slices.${case}" PROPERTIES TIMEOUT 20 LABELS "umicom-c;machine;slices")
+endforeach()
+
+# Digit separators are lexical spelling; wire and runtime operations are retained.
+add_executable(umicom-c-test-digit-separators test_digit_separators.c)
+target_link_libraries(umicom-c-test-digit-separators PRIVATE UmicomC::Compiler)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-digit-separators PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+foreach(case values refusals overflow spans wire)
+    add_test(NAME "umicom.c.digit-separators.${case}" COMMAND umicom-c-test-digit-separators "${case}")
+    set_tests_properties("umicom.c.digit-separators.${case}" PROPERTIES TIMEOUT 20 LABELS "umicom-c;compiler;literals")
+endforeach()
+if(TARGET umicom-c)
+    add_test(NAME umicom.c.cli-digit-separators COMMAND "${CMAKE_COMMAND}"
+        "-DTOOL=$<TARGET_FILE:umicom-c>" "-DSOURCE=${PROJECT_SOURCE_DIR}/examples/digit_separators.uc"
+        "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/digit-separator-artifacts"
+        -P "${CMAKE_CURRENT_LIST_DIR}/check_cli_integer_literals.cmake")
+    set_tests_properties(umicom.c.cli-digit-separators PROPERTIES TIMEOUT 60 LABELS "umicom-c;compiler;literals;cli")
+endif()
+
+# BASIC comments affect lexical region admission only; no foreign code executes.
+add_executable(umicom-c-test-basic-comment-regions test_basic_comment_regions.c)
+target_link_libraries(umicom-c-test-basic-comment-regions PRIVATE UmicomC::Compiler)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-basic-comment-regions PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+foreach(case line-comments colon-comments keyword-boundaries quotes-and-comments other-languages bounded-span)
+    add_test(NAME "umicom.c.source-regions.basic.${case}" COMMAND umicom-c-test-basic-comment-regions "${case}")
+    set_tests_properties("umicom.c.source-regions.basic.${case}" PROPERTIES TIMEOUT 20 LABELS "umicom-c;language-regions;basic")
+endforeach()
+
+# Read-only locals are compiler admission, not a bytecode mutation permission.
+add_executable(umicom-c-test-readonly-locals test_readonly_locals.c)
+target_link_libraries(umicom-c-test-readonly-locals PRIVATE UmicomC::Compiler)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-readonly-locals PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+foreach(case values writes syntax faults wire spans limits native)
+    add_test(NAME "umicom.c.readonly-locals.${case}" COMMAND umicom-c-test-readonly-locals "${case}")
+    set_tests_properties("umicom.c.readonly-locals.${case}" PROPERTIES TIMEOUT 20 LABELS "umicom-c;compiler;locals")
+endforeach()
+if(TARGET umicom-c)
+    add_test(NAME umicom.c.cli-readonly-locals COMMAND "${CMAKE_COMMAND}"
+        "-DTOOL=$<TARGET_FILE:umicom-c>" "-DSOURCE=${PROJECT_SOURCE_DIR}/examples/readonly_locals.uc"
+        "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/readonly-local-artifacts"
+        -P "${CMAKE_CURRENT_LIST_DIR}/check_cli_readonly_locals.cmake")
+    set_tests_properties(umicom.c.cli-readonly-locals PROPERTIES TIMEOUT 60 LABELS "umicom-c;compiler;locals;cli")
+endif()
+
+# Lexical branch names lower through existing slot and forward-branch owners.
+add_executable(umicom-c-test-branch-locals test_branch_locals.c)
+target_link_libraries(umicom-c-test-branch-locals PRIVATE UmicomC::Compiler)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-branch-locals PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+foreach(case values visibility wire limits reuse native faults spans depth)
+    add_test(NAME "umicom.c.branch-locals.${case}" COMMAND umicom-c-test-branch-locals "${case}")
+    set_tests_properties("umicom.c.branch-locals.${case}" PROPERTIES TIMEOUT 20 LABELS "umicom-c;compiler;locals;scope")
+endforeach()
+
+# The public CLI must preserve the same lexical visibility and wire contract.
+if(TARGET umicom-c)
+    add_test(NAME umicom.c.cli-branch-locals COMMAND "${CMAKE_COMMAND}"
+        "-DTOOL=$<TARGET_FILE:umicom-c>" "-DSOURCE=${PROJECT_SOURCE_DIR}/examples/branch_locals.uc"
+        "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/branch-local-artifacts"
+        -P "${CMAKE_CURRENT_LIST_DIR}/check_cli_branch_locals.cmake")
+    set_tests_properties(umicom.c.cli-branch-locals PROPERTIES TIMEOUT 60 LABELS "umicom-c;compiler;scope;cli")
+endif()
+
+# Standalone scopes share branch-body ownership without runtime additions.
+add_executable(umicom-c-test-compound-statements test_compound_statements.c)
+target_link_libraries(umicom-c-test-compound-statements PRIVATE UmicomC::Compiler)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-compound-statements PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+foreach(case values visibility refusals limits reuse depth wire faults spans native)
+    add_test(NAME "umicom.c.compound-statements.${case}" COMMAND umicom-c-test-compound-statements "${case}")
+    set_tests_properties("umicom.c.compound-statements.${case}" PROPERTIES TIMEOUT 20 LABELS "umicom-c;compiler;locals;scope")
+endforeach()
+
+if(TARGET umicom-c)
+    add_test(NAME umicom.c.cli-compound-statements COMMAND "${CMAKE_COMMAND}"
+        "-DTOOL=$<TARGET_FILE:umicom-c>" "-DSOURCE=${PROJECT_SOURCE_DIR}/examples/compound_statements.uc"
+        "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/compound-statement-artifacts"
+        -P "${CMAKE_CURRENT_LIST_DIR}/check_cli_compound_statements.cmake")
+    set_tests_properties(umicom.c.cli-compound-statements PROPERTIES TIMEOUT 60 LABELS "umicom-c;compiler;scope;cli")
+endif()
+
+# Source warnings share the compiler; these cases never require a GUI or installed SDK.
+add_executable(umicom-c-test-source-warnings test_source_warnings.c)
+target_link_libraries(umicom-c-test-source-warnings PRIVATE UmicomC::Compiler)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-source-warnings PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+foreach(case reads updates branches scopes positions refusals limits spans no-execution repeat)
+    add_test(NAME "umicom.c.source-warnings.${case}" COMMAND umicom-c-test-source-warnings "${case}")
+    set_tests_properties("umicom.c.source-warnings.${case}" PROPERTIES TIMEOUT 20 LABELS "umicom-c;compiler;warnings")
+endforeach()
+if(TARGET umicom-c)
+    add_test(NAME umicom.c.cli-source-warnings COMMAND "${CMAKE_COMMAND}"
+        "-DTOOL=$<TARGET_FILE:umicom-c>" "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/source-warning-artifacts"
+        -P "${CMAKE_CURRENT_LIST_DIR}/check_cli_source_warnings.cmake")
+    set_tests_properties(umicom.c.cli-source-warnings PROPERTIES TIMEOUT 60 LABELS "umicom-c;compiler;warnings;cli")
+endif()
+
+# Package discovery is checked separately from installed archive/link qualification.
+add_subdirectory(package_components)
+
+# Checked shifts share the canonical compiler/runtime and exercise wire format 7.
+add_executable(umicom-c-test-shifts test_shifts.c)
+target_link_libraries(umicom-c-test-shifts PRIVATE UmicomC::Compiler)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-shifts PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+endif()
+foreach(case IN ITEMS values precedence updates refusals faults wire versions malformed fuel spans native)
+    add_test(NAME "umicom.c.shifts.${case}" COMMAND umicom-c-test-shifts "${case}")
+    set_tests_properties("umicom.c.shifts.${case}" PROPERTIES LABELS "umicom-c;compiler;runtime;shifts" TIMEOUT 15)
+endforeach()
+
+if(TARGET umicom-c)
+    add_test(NAME umicom.c.cli-shifts
+        COMMAND "${CMAKE_COMMAND}" "-DTOOL=$<TARGET_FILE:umicom-c>"
+        "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/shift-artifacts"
+        "-DSOURCE=${PROJECT_SOURCE_DIR}/examples/checked_shifts.uc"
+        -P "${CMAKE_CURRENT_LIST_DIR}/check_cli_shifts.cmake")
+    set_tests_properties(umicom.c.cli-shifts PROPERTIES LABELS "umicom-c;cli;shifts" TIMEOUT 45)
+endif()
+
+# Check graph inspection independently from collector mutation.
+add_executable(umicom-c-test-heap-inspection test_heap_inspection.c)
+target_link_libraries(umicom-c-test-heap-inspection PRIVATE UmicomC::ManagedHeap)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-heap-inspection PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+foreach(case totals cycles refusal retirement graphs)
+    add_test(NAME "umicom.c.heap-inspection.${case}" COMMAND umicom-c-test-heap-inspection "${case}")
+    set_tests_properties("umicom.c.heap-inspection.${case}" PROPERTIES TIMEOUT 20 LABELS "umicom-c;managed-heap;inspection")
+endforeach()
+
+# Empty source statements consume no runtime records or fuel.
+add_executable(umicom-c-test-empty-statements test_empty_statements.c)
+target_link_libraries(umicom-c-test-empty-statements PRIVATE UmicomC::Compiler)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-empty-statements PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+foreach(case values cost wire refusals many warnings spans)
+    add_test(NAME "umicom.c.empty-statements.${case}" COMMAND umicom-c-test-empty-statements "${case}")
+    set_tests_properties("umicom.c.empty-statements.${case}" PROPERTIES TIMEOUT 20 LABELS "umicom-c;compiler;grammar;ownership")
+endforeach()
+
+if(TARGET umicom-c)
+    add_test(NAME umicom.c.cli-empty-statements COMMAND "${CMAKE_COMMAND}"
+        "-DTOOL=$<TARGET_FILE:umicom-c>" "-DSOURCE=${PROJECT_SOURCE_DIR}/examples/empty_statements.uc"
+        "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/empty-statement-artifacts"
+        -P "${CMAKE_CURRENT_LIST_DIR}/check_cli_empty_statements.cmake")
+    set_tests_properties(umicom.c.cli-empty-statements PROPERTIES TIMEOUT 60 LABELS "umicom-c;compiler;grammar;cli")
+endif()
+
+# ASCII character tokens lower through the existing integer runtime.
+add_executable(umicom-c-test-ascii-characters test_ascii_characters.c)
+target_link_libraries(umicom-c-test-ascii-characters PRIVATE UmicomC::Compiler)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-ascii-characters PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+foreach(case printable escapes numeric refusals ranges spans wire warnings long-escape)
+    add_test(NAME "umicom.c.ascii-characters.${case}" COMMAND umicom-c-test-ascii-characters "${case}")
+    set_tests_properties("umicom.c.ascii-characters.${case}" PROPERTIES TIMEOUT 20 LABELS "umicom-c;compiler;grammar;characters")
+endforeach()
+if(TARGET umicom-c)
+    add_test(NAME umicom.c.cli-ascii-characters COMMAND "${CMAKE_COMMAND}"
+        "-DTOOL=$<TARGET_FILE:umicom-c>" "-DSOURCE=${PROJECT_SOURCE_DIR}/examples/ascii_characters.uc"
+        "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/ascii-character-artifacts"
+        -P "${CMAKE_CURRENT_LIST_DIR}/check_cli_ascii_characters.cmake")
+    set_tests_properties(umicom.c.cli-ascii-characters PROPERTIES TIMEOUT 60 LABELS "umicom-c;compiler;grammar;cli")
+endif()
+
+# Declaration lists share one local owner and require no new runtime opcode.
+add_executable(umicom-c-test-declarator-lists test_declarator_lists.c)
+target_link_libraries(umicom-c-test-declarator-lists PRIVATE UmicomC::Compiler)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-declarator-lists PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+foreach(case values scope qualifiers refusals parity capacity warnings spans wire faults)
+    add_test(NAME "umicom.c.declarator-lists.${case}" COMMAND umicom-c-test-declarator-lists "${case}")
+    set_tests_properties("umicom.c.declarator-lists.${case}" PROPERTIES TIMEOUT 20 LABELS "umicom-c;compiler;grammar;locals")
+endforeach()
+if(TARGET umicom-c)
+    add_test(NAME umicom.c.cli-declarator-lists COMMAND "${CMAKE_COMMAND}"
+        "-DTOOL=$<TARGET_FILE:umicom-c>" "-DSOURCE=${PROJECT_SOURCE_DIR}/examples/declarator_lists.uc"
+        "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/declarator-list-artifacts"
+        -P "${CMAKE_CURRENT_LIST_DIR}/check_cli_declarator_lists.cmake")
+    set_tests_properties(umicom.c.cli-declarator-lists PROPERTIES TIMEOUT 60 LABELS "umicom-c;compiler;grammar;cli")
+endif()
+
+# Structural path budgets do not execute source or alter existing inspection output.
+add_executable(umicom-c-test-execution-bounds test_execution_bounds.c)
+target_link_libraries(umicom-c-test-execution-bounds PRIVATE UmicomC::Compiler)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-execution-bounds PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+foreach(case IN ITEMS straight branches fuel source-paths conservative arithmetic refusal malformed maximum wire)
+    add_test(NAME "umicom.c.execution-bounds.${case}" COMMAND umicom-c-test-execution-bounds "${case}")
+    set_tests_properties("umicom.c.execution-bounds.${case}" PROPERTIES TIMEOUT 20 LABELS "umicom-c;runtime;inspection;fuel")
+endforeach()
+
+if(UMICOM_C_BUILD_TOOLS)
+    add_test(NAME umicom.c.cli-execution-bounds COMMAND "${CMAKE_COMMAND}"
+        "-DTOOL=$<TARGET_FILE:umicom-c>" "-DSOURCE=${PROJECT_SOURCE_DIR}/examples/path_budget.uc"
+        "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/execution-bounds-artifacts"
+        -P "${CMAKE_CURRENT_LIST_DIR}/check_cli_execution_bounds.cmake")
+    set_tests_properties(umicom.c.cli-execution-bounds PROPERTIES TIMEOUT 60 LABELS "umicom-c;cli;inspection;fuel")
+endif()
+
+# Source excerpts are compiler presentation; no VM or wire profile is changed.
+add_executable(umicom-c-test-diagnostic-excerpt test_diagnostic_excerpt.c)
+target_link_libraries(umicom-c-test-diagnostic-excerpt PRIVATE UmicomC::Compiler)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-diagnostic-excerpt PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+foreach(case IN ITEMS basic empty newlines escapes all-bytes window maximum refusal surrounding-lines)
+    add_test(NAME "umicom.c.diagnostic-excerpt.${case}" COMMAND umicom-c-test-diagnostic-excerpt "${case}")
+    set_tests_properties("umicom.c.diagnostic-excerpt.${case}" PROPERTIES TIMEOUT 20 LABELS "umicom-c;compiler;diagnostics")
+endforeach()
+if(UMICOM_C_BUILD_TOOLS)
+    add_test(NAME umicom.c.cli-diagnostic-excerpt COMMAND "${CMAKE_COMMAND}"
+        "-DTOOL=$<TARGET_FILE:umicom-c>" "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/excerpt-artifacts"
+        -P "${CMAKE_CURRENT_LIST_DIR}/check_cli_diagnostic_excerpt.cmake")
+    set_tests_properties(umicom.c.cli-diagnostic-excerpt PROPERTIES TIMEOUT 60 LABELS "umicom-c;cli;diagnostics")
+endif()
+
+# Nested BASIC comments remain lexical classification, with bounded iterative state.
+add_executable(umicom-c-test-basic-block-regions test_basic_block_regions.c)
+target_link_libraries(umicom-c-test-basic-block-regions PRIVATE UmicomC::Compiler)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-basic-block-regions PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+foreach(case ordinary nested protected-markers statement-state depth-boundary depth-overflow unterminated bounded-span language-isolation source-and-output-bounds)
+    add_test(NAME "umicom.c.source-regions.basic-block.${case}" COMMAND umicom-c-test-basic-block-regions "${case}")
+    set_tests_properties("umicom.c.source-regions.basic-block.${case}" PROPERTIES TIMEOUT 20 LABELS "umicom-c;language-regions;basic")
+endforeach()
+
+if(TARGET umicom-c)
+    add_test(NAME umicom.c.source-regions.basic-block.cli COMMAND "${CMAKE_COMMAND}"
+        "-DTOOL=$<TARGET_FILE:umicom-c>" "-DSOURCE=${PROJECT_SOURCE_DIR}/examples/basic_block_comments.umc"
+        "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/basic-block-cli"
+        -P "${CMAKE_CURRENT_LIST_DIR}/check_basic_block_regions.cmake")
+    set_tests_properties(umicom.c.source-regions.basic-block.cli PROPERTIES TIMEOUT 30 LABELS "umicom-c;language-regions;basic;cli")
+endif()
+
+# Boolean keyword spelling uses the existing integer operations and wire format.
+add_executable(umicom-c-test-boolean-literals test_boolean_literals.c)
+target_link_libraries(umicom-c-test-boolean-literals PRIVATE UmicomC::Compiler)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-boolean-literals PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+foreach(case values native-parity keywords scope warnings spans wire fuel faults)
+    add_test(NAME "umicom.c.boolean-literals.${case}" COMMAND umicom-c-test-boolean-literals "${case}")
+    set_tests_properties("umicom.c.boolean-literals.${case}" PROPERTIES TIMEOUT 20 LABELS "umicom-c;compiler;grammar;boolean")
+endforeach()
+if(TARGET umicom-c)
+    add_test(NAME umicom.c.cli-boolean-literals COMMAND "${CMAKE_COMMAND}"
+        "-DTOOL=$<TARGET_FILE:umicom-c>" "-DSOURCE=${PROJECT_SOURCE_DIR}/examples/boolean_literals.uc"
+        "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/boolean-literal-artifacts"
+        -P "${CMAKE_CURRENT_LIST_DIR}/check_cli_boolean_literals.cmake")
+    set_tests_properties(umicom.c.cli-boolean-literals PROPERTIES TIMEOUT 60 LABELS "umicom-c;compiler;grammar;cli")
+endif()
+
+# D envelopes classify boundaries; no foreign frontend or execution is added.
+add_executable(umicom-c-test-d-regions test_d_regions.c)
+target_link_libraries(umicom-c-test-d-regions PRIVATE UmicomC::Compiler)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-d-regions PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+foreach(case identity ordinary strings comments prefix-boundary unsupported-strings depth-boundary
+    depth-overflow unterminated bounded-span language-isolation source-bounds tags classification-only)
+    add_test(NAME "umicom.c.source-regions.d.${case}" COMMAND umicom-c-test-d-regions "${case}")
+    set_tests_properties("umicom.c.source-regions.d.${case}" PROPERTIES TIMEOUT 20 LABELS "umicom-c;language-regions;d")
+endforeach()
+
+if(TARGET umicom-c)
+    add_test(NAME umicom.c.source-regions.d.cli COMMAND "${CMAKE_COMMAND}"
+        "-DTOOL=$<TARGET_FILE:umicom-c>" "-DSOURCE=${PROJECT_SOURCE_DIR}/examples/d_regions.umc"
+        "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/d-regions-cli"
+        -P "${CMAKE_CURRENT_LIST_DIR}/check_d_regions.cmake")
+    set_tests_properties(umicom.c.source-regions.d.cli PROPERTIES TIMEOUT 30 LABELS "umicom-c;language-regions;d;cli")
+endif()

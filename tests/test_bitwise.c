@@ -87,7 +87,11 @@ static int Refusals(void)
 {
     const char *bodies[]={"return &1;","return |1;","return ^1;","return 1&;",
         "return 1|;","return 1^;","return 1^^2;","return 1& &2;",
+/* Shifts are now accepted; retain missing-operand refusals and qualify values in the shift suite. The former implementation is retained for owner review. */
+#if 0
         "return 1| |2;","return 1<<2;","return 1>>2;","return 1u&2;",
+#endif
+        "return 1| |2;","return 1<<;","return 1>>;","return 1u&2;",
         "return 1.0|2;","int x&=1;return x;","int x=1;return x|=2;",
         "int x=1;x& =2;return x;","int x=1;x^/*gap*/=2;return x;",
         "int x=1;x||=2;return x;","int x=1;x&&=2;return x;",
@@ -150,7 +154,11 @@ static int Wire(void)
     }
     CHECK(umc_compiler_profile(UMC_PROFILE_FEATURES)&UMC_FEATURE_BINARY_BITWISE);
     CHECK(umc_runtime_profile(UMC_PROFILE_FEATURES)&UMC_FEATURE_BINARY_BITWISE);
+/* Format 7 is additive; the format-6 golden bytes remain unchanged. The former implementation is retained for owner review. */
+#if 0
     CHECK(umc_runtime_profile(UMC_PROFILE_WIRE_VERSIONS)==126U);
+#endif
+    CHECK(umc_runtime_profile(UMC_PROFILE_WIRE_VERSIONS)==254U);
     return 0;
 }
 static int Versions(void)

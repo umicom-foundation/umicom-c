@@ -14,4 +14,30 @@
 #---------------------------------------------------------------------------
 @PACKAGE_INIT@
 include("${CMAKE_CURRENT_LIST_DIR}/UmicomCTargets.cmake")
+
+# A CMake component is an explicit request for an exported target. Merely
+# loading UmicomCTargets does not set the per-component *_FOUND variables used
+# by check_required_components. Recompute them for every discovery so a prior
+# optional/quiet refusal cannot leak stale state into a later valid request.
+set(UmicomC_FOUND TRUE)
+unset(UmicomC_NOT_FOUND_MESSAGE)
+set(_umicom_c_supported_components Compiler Runtime ManagedHeap)
+set(_umicom_c_missing_required "")
+foreach(_umicom_c_component IN LISTS UmicomC_FIND_COMPONENTS)
+    set("UmicomC_${_umicom_c_component}_FOUND" FALSE)
+    if(_umicom_c_component IN_LIST _umicom_c_supported_components AND
+       TARGET "UmicomC::${_umicom_c_component}")
+        set("UmicomC_${_umicom_c_component}_FOUND" TRUE)
+    elseif(UmicomC_FIND_REQUIRED_${_umicom_c_component})
+        list(APPEND _umicom_c_missing_required "${_umicom_c_component}")
+    endif()
+endforeach()
+if(_umicom_c_missing_required)
+    set(UmicomC_NOT_FOUND_MESSAGE
+        "Required Umicom C components are unavailable: ${_umicom_c_missing_required}. Supported names are Compiler, Runtime and ManagedHeap.")
+endif()
+unset(_umicom_c_component)
+unset(_umicom_c_supported_components)
+unset(_umicom_c_missing_required)
+
 check_required_components(UmicomC)

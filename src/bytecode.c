@@ -97,6 +97,8 @@ static uint8_t program_wire_version(const UmcInstruction *program, size_t count)
     return version;
 }
 #endif
+/* Select the maximum required format across all records; older bitwise records must not hide later shifts. The former implementation is retained for owner review. */
+#if 0
 static uint8_t program_wire_version(const UmcInstruction *program, size_t count)
 {
     uint8_t version = 1U;
@@ -105,6 +107,30 @@ static uint8_t program_wire_version(const UmcInstruction *program, size_t count)
             program[i].opcode == UMC_BITWISE_XOR || program[i].opcode == UMC_BITWISE_OR)
             return 6U;
         if (program[i].opcode == UMC_REMAINDER) version = 5U;
+        else if (version < 4U &&
+            (program[i].opcode == UMC_JUMP || program[i].opcode == UMC_JUMP_IF_ZERO))
+            version = 4U;
+        else if (version < 3U &&
+            (program[i].opcode == UMC_LOAD_LOCAL || program[i].opcode == UMC_STORE_LOCAL))
+            version = 3U;
+        else if (version < 2U &&
+            program[i].opcode >= UMC_LESS && program[i].opcode <= UMC_NOT_EQUAL)
+            version = 2U;
+    }
+    return version;
+}
+
+#endif
+static uint8_t program_wire_version(const UmcInstruction *program, size_t count)
+{
+    uint8_t version = 1U;
+    for (size_t i = 0U; i < count; ++i) {
+        if (program[i].opcode == UMC_SHIFT_LEFT || program[i].opcode == UMC_SHIFT_RIGHT)
+            return 7U;
+        if (program[i].opcode == UMC_BITWISE_AND ||
+            program[i].opcode == UMC_BITWISE_XOR || program[i].opcode == UMC_BITWISE_OR)
+            version = 6U;
+        if (version < 5U && program[i].opcode == UMC_REMAINDER) version = 5U;
         else if (version < 4U &&
             (program[i].opcode == UMC_JUMP || program[i].opcode == UMC_JUMP_IF_ZERO))
             version = 4U;
@@ -378,9 +404,18 @@ UmcStatus umc_decode(const uint8_t *bytes, size_t length,
     if (bytes == NULL || output == NULL || count == NULL) {
         return umc_fail(diagnostic, UMC_INVALID_ARGUMENT, 0U);
     }
+/* Admit format 7 while retaining full structural and canonical-format validation. The former implementation is retained for owner review. */
+#if 0
     if (length < UMC_BYTECODE_HEADER_SIZE || length > UMC_BYTECODE_LIMIT ||
         bytes[0] != 'U' || bytes[1] != 'M' || bytes[2] != 'C' || bytes[3] != 'B' ||
         (bytes[4] != 1U && bytes[4] != 2U && bytes[4] != 3U && bytes[4] != 4U && bytes[4] != 5U && bytes[4] != 6U) || bytes[5] != 0U) {
+        return umc_fail(diagnostic, UMC_BAD_BYTECODE, 0U);
+    }
+
+#endif
+    if (length < UMC_BYTECODE_HEADER_SIZE || length > UMC_BYTECODE_LIMIT ||
+        bytes[0] != 'U' || bytes[1] != 'M' || bytes[2] != 'C' || bytes[3] != 'B' ||
+        (bytes[4] != 1U && bytes[4] != 2U && bytes[4] != 3U && bytes[4] != 4U && bytes[4] != 5U && bytes[4] != 6U && bytes[4] != 7U) || bytes[5] != 0U) {
         return umc_fail(diagnostic, UMC_BAD_BYTECODE, 0U);
     }
     const size_t records = (size_t)bytes[6] | ((size_t)bytes[7] << 8U);

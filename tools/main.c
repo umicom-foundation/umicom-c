@@ -17,10 +17,23 @@
 #include "umicom_c/source_regions.h"
 #include "umicom_c/trace.h"
 #include "umicom_c/profile.h"
+#include "umicom_c/execution_bounds.h"
+#include "umicom_c/diagnostic_excerpt.h"
 #include "umicom_c/comparison.h"
+#include "umicom_c/source_check.h"
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
+
+/* Source formatting belongs to the compiler service; the hosted client only
+ * adds a gutter and writes its bounded printable-ASCII result. */
+static void print_source_excerpt(const uint8_t *source, size_t length, size_t offset)
+{
+    UmcDiagnosticExcerpt excerpt;
+    if (umc_diagnostic_excerpt((const char *)source, length, offset, &excerpt) != UMC_OK)
+        return;
+    fprintf(stderr, "  | %s\n  | %*s^\n", excerpt.text, (int)excerpt.caret_column, "");
+}
 
 static int read_file(const char *name, uint8_t *bytes, size_t capacity, size_t *length)
 {
@@ -66,12 +79,15 @@ static int usage(void)
 {
     fputs("Usage:\n"
           "  umicom-c check source.uc\n"
+          "  umicom-c check source.uc --warnings\n"
           "  umicom-c regions mixed.umc\n"
           "  umicom-c debug source.uc [--max-steps N]\n"
           "  umicom-c debug-bytecode program.umcb [--max-steps N]\n"
           "  umicom-c compare-operations left.uc right.uc\n"
           "  umicom-c inspect source.uc\n"
           "  umicom-c inspect-bytecode program.umcb\n"
+          "  umicom-c budget source.uc\n"
+          "  umicom-c budget-bytecode program.umcb\n"
           "  umicom-c run source.uc [--max-steps N]\n"
           "  umicom-c compile source.uc new-output.umcb\n"
           "  umicom-c exec program.umcb [--max-steps N]\n"
@@ -176,6 +192,7 @@ static int compare_operations(const char *left_path, const char *right_path)
             UMC_PROGRAM_LIMIT, &counts[side], &diagnostic) != UMC_OK) {
             fprintf(stderr, "%s:%zu:%zu: %s\n", paths[side], diagnostic.line,
                 diagnostic.column, diagnostic.message);
+            print_source_excerpt(source, bytes, diagnostic.source_offset);
             return 2;
         }
     }
@@ -212,12 +229,46 @@ static int print_regions(const char *name)
     }
     for(size_t i=0;i<count;++i)printf("region=%zu language=%s offset=%zu bytes=%zu\n",i,
         umc_source_language_name(regions[i].language),regions[i].offset,regions[i].length);
+/* Keep the previous classification disclaimer while naming the newly recognized D envelope. The former implementation is retained for owner review. */
+#if 0
     puts("Classification only; tags do not compile or execute BASIC, Java or full C23.");
+#endif
+    puts("Classification only; tags do not compile or execute BASIC, Java, D or full C23.");
     return fflush(stdout)!=0 || ferror(stdout)?2:0;
 }
 
+/* Keep file I/O and presentation in the hosted command. The compiler owns
+ * declaration tracking and byte positions; this route never invokes the VM. */
+static int check_source_warnings(const char *name)
+{
+    uint8_t source[UMC_SOURCE_LIMIT];
+    size_t length = 0U;
+    UmcSourceReport report;
+    UmcDiagnostic diagnostic;
+    if (!read_file(name, source, sizeof source, &length)) return 2;
+    if (umc_check_source((const char *)source, length, &report, &diagnostic) != UMC_OK) {
+        fprintf(stderr, "%s:%zu:%zu: %s\n", name, diagnostic.line,
+            diagnostic.column, diagnostic.message);
+        print_source_excerpt(source, length, diagnostic.source_offset);
+        return 2;
+    }
+    for (size_t i = 0U; i < report.warning_count; ++i) {
+        const UmcSourceWarning *warning = &report.warnings[i];
+        fprintf(stderr, "%s:%zu:%zu: warning: local '%.*s' is never read\n",
+            name, warning->line, warning->column, (int)warning->source_length,
+            (const char *)source + warning->source_offset);
+        print_source_excerpt(source, length, warning->source_offset);
+    }
+    printf("Syntax and bytecode structure accepted: %zu instructions; %zu warnings\n",
+        report.instruction_count, report.warning_count);
+    return ferror(stdout) || ferror(stderr) ? 1 : 0;
+}
+
+
 int main(int argc, char **argv)
 {
+    if (argc == 4 && strcmp(argv[1], "check") == 0 && strcmp(argv[3], "--warnings") == 0)
+        return check_source_warnings(argv[2]);
     if (argc >= 2 && strcmp(argv[1], "regions") == 0)
         return argc == 3 ? print_regions(argv[2]) : usage();
     if (argc >= 2 && strcmp(argv[1], "compare-operations") == 0)
@@ -241,6 +292,9 @@ int main(int argc, char **argv)
     const int disassemble = strcmp(argv[1], "disassemble") == 0;
     const int inspect_source = strcmp(argv[1], "inspect") == 0;
     const int inspect_bytes = strcmp(argv[1], "inspect-bytecode") == 0;
+    const int budget_source = strcmp(argv[1], "budget") == 0;
+    const int budget_bytes = strcmp(argv[1], "budget-bytecode") == 0;
+    const int budgeting = budget_source || budget_bytes;
     const int trace_source = strcmp(argv[1], "trace") == 0;
     const int trace_bytes = strcmp(argv[1], "trace-bytecode") == 0;
     const int tracing = trace_source || trace_bytes;
@@ -272,7 +326,11 @@ int main(int argc, char **argv)
         !inspect_source && !inspect_bytes && !tracing) return usage();
     if ((run || execute || tracing) && argc == 5) {
 #endif
+/* Keep the prior command gate for review; path-budget commands add a read-only route. The former implementation is retained for owner review. */
+#if 0
         !inspect_source && !inspect_bytes && !tracing && !debugging) return usage();
+#endif
+        !inspect_source && !inspect_bytes && !tracing && !debugging && !budgeting) return usage();
     if ((run || execute || tracing || debugging) && argc == 5) {
         if (strcmp(argv[3], "--max-steps") != 0 || !step_limit(argv[4], &fuel)) {
             fprintf(stderr, "--max-steps requires a decimal integer from 1 to %u.\n",
@@ -302,7 +360,11 @@ int main(int argc, char **argv)
 #if 0
     const int binary = execute || disassemble || inspect_bytes || trace_bytes;
 #endif
+/* Read budget-bytecode through the existing bounded decoder; preserve the previous selector. The former implementation is retained for owner review. */
+#if 0
     const int binary = execute || disassemble || inspect_bytes || trace_bytes || debug_bytes;
+#endif
+    const int binary = execute || disassemble || inspect_bytes || trace_bytes || debug_bytes || budget_bytes;
     if (!read_file(argv[2], input, binary ? UMC_BYTECODE_LIMIT : UMC_SOURCE_LIMIT, &length)) {
         return 2;
     }
@@ -311,7 +373,17 @@ int main(int argc, char **argv)
         umc_compile((const char *)input, length, instructions, UMC_PROGRAM_LIMIT, &count, &diagnostic);
     if (status == UMC_OK && debugging)
         return umc_debug_console(binary ? NULL : (const char *)input, length, instructions, count, fuel, stdin, stdout, stderr);
-    if (status == UMC_OK && (inspect_source || inspect_bytes)) {
+    /* Keep the existing inspect output stable. Budgeting has its own additive
+     * commands and reuses runtime validation without performing arithmetic. */
+    if (status == UMC_OK && budgeting) {
+        UmcExecutionBounds bounds;
+        status = umc_execution_bounds(instructions, count, &bounds, &diagnostic);
+        if (status == UMC_OK) {
+            printf("Structural minimum instructions: %zu\nStructural maximum instructions: %zu\n",
+                bounds.minimum_instructions, bounds.maximum_instructions);
+            puts("Both branch alternatives are considered; arithmetic has not been executed.");
+        }
+    } else if (status == UMC_OK && (inspect_source || inspect_bytes)) {
         UmcProgramInfo info;
         status = umc_inspect(instructions, count, &info, &diagnostic);
         if (status == UMC_OK) {
@@ -376,6 +448,7 @@ int main(int argc, char **argv)
             fprintf(stderr, "%s: source-byte=%zu: %s\n", argv[2],
                 diagnostic.source_offset, diagnostic.message);
         }
+        if (!binary) print_source_excerpt(input, length, diagnostic.source_offset);
         return 1;
     }
     return 0;
