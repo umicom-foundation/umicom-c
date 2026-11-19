@@ -38,10 +38,33 @@
 int main(int argc, char **argv)
 {
     REQUIRE_REPORT(argc == 5);
-    REQUIRE_REPORT(!strcmp(argv[3], "same") || !strcmp(argv[3], "different"));
     REQUIRE_REPORT(!strcmp(argv[4], "deny") || !strcmp(argv[4], "control"));
-    const int semantic = strcmp(argv[3], "same") ? 1 : 0;
     const int deny = !strcmp(argv[4], "deny");
+    const char *scenario = argv[3];
+    int semantic = 0;
+    int failed_write = 2;
+    int argument_count = 3;
+    char *arguments[] = {"umicom-c", argv[3], argv[1], NULL, NULL};
+    /* Exercise the same real CLI entry and descriptor with each report route.
+     * Keep the existing comparison cases and their valid-difference exit. */
+    if (!strcmp(scenario, "same") || !strcmp(scenario, "different")) {
+        semantic = !strcmp(scenario, "different");
+        arguments[1] = "compare-operations";
+        arguments[3] = argv[2];
+        argument_count = 4;
+    } else if (!strcmp(scenario, "--version") || !strcmp(scenario, "profile")) {
+        arguments[2] = NULL;
+        argument_count = 2;
+        if (!strcmp(scenario, "profile")) failed_write = 1;
+    } else if (!strcmp(scenario, "warnings")) {
+        arguments[1] = "check";
+        arguments[3] = "--warnings";
+        argument_count = 4;
+        failed_write = 1;
+    } else {
+        REQUIRE_REPORT(!strcmp(scenario, "check") || !strcmp(scenario, "run") ||
+            !strcmp(scenario, "budget") || !strcmp(scenario, "inspect"));
+    }
     uint8_t left_before[512], right_before[512], after[512];
     size_t left_size = 0U, right_size = 0U, after_size = 0U;
     REQUIRE_REPORT(read_file(argv[1], left_before, sizeof(left_before), &left_size));
@@ -56,14 +79,13 @@ int main(int argc, char **argv)
         REQUIRE_REPORT(read_only != NULL);
         REQUIRE_REPORT(UMC_REPORT_DUP2(UMC_REPORT_FILENO(read_only), UMC_REPORT_FILENO(stdout)) >= 0);
     }
-    char *arguments[] = {"umicom-c", "compare-operations", argv[1], argv[2], NULL};
-    const int result = umicom_cli_test_entry(4, arguments);
+    const int result = umicom_cli_test_entry(argument_count, arguments);
     const int output_failed = ferror(stdout) != 0;
     /* Close while the denied descriptor is still installed. Restoring stdout
      * first could publish a failed report during process-exit cleanup. */
     const int closed = fclose(stdout);
     if (read_only) REQUIRE_REPORT(fclose(read_only) == 0);
-    REQUIRE_REPORT(result == (deny ? 2 : semantic));
+    REQUIRE_REPORT(result == (deny ? failed_write : semantic));
     REQUIRE_REPORT(output_failed == deny);
     if (!deny) REQUIRE_REPORT(closed == 0);
     REQUIRE_REPORT(read_file(argv[1], after, sizeof(after), &after_size));

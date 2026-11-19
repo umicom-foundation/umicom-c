@@ -25,6 +25,13 @@
 #include <stdio.h>
 #include <string.h>
 
+/* The hosted CLI owns report delivery. A successful short write may still be
+ * buffered, so check the stream after requesting delivery before returning. */
+static int report_write_failed(FILE *stream)
+{
+    return fflush(stream) != 0 || ferror(stream);
+}
+
 /* Source formatting belongs to the compiler service; the hosted client only
  * adds a gutter and writes its bounded printable-ASCII result. */
 static void print_source_excerpt(const uint8_t *source, size_t length, size_t offset)
@@ -170,7 +177,12 @@ static int print_profile(void)
         umc_compiler_profile(UMC_PROFILE_LOCAL_VALUES),
         umc_compiler_profile(UMC_PROFILE_IDENTIFIER_BYTES),
         umc_runtime_profile(UMC_PROFILE_LOCAL_VALUES));
+    /* Retain the early stream check for review. The shared host helper also
+     * observes errors raised when a buffered profile reaches its destination. */
+#if 0
     return ferror(stdout) ? 1 : 0;
+#endif
+    return report_write_failed(stdout) ? 1 : 0;
 }
 
 
@@ -211,7 +223,12 @@ static int compare_operations(const char *left_path, const char *right_path)
 #if 0
     if (ferror(stdout)) return 2;
 #endif
+    /* Retain the command-local flush for review. The shared host helper keeps
+     * exactly this completion rule for reports from every command route. */
+#if 0
     if (fflush(stdout) != 0 || ferror(stdout)) return 2;
+#endif
+    if (report_write_failed(stdout)) return 2;
     /* Deliberately distinguish a valid difference from invalid input. This
      * command-specific result must not be mistaken for general C equivalence,
      * matching diagnostic locations, binary identity or build-cache approval. */
@@ -261,7 +278,14 @@ static int check_source_warnings(const char *name)
     }
     printf("Syntax and bytecode structure accepted: %zu instructions; %zu warnings\n",
         report.instruction_count, report.warning_count);
+    /* Retain the earlier stream-state check for review. Finish both streams
+     * so an output failure cannot hide buffered diagnostics. */
+#if 0
     return ferror(stdout) || ferror(stderr) ? 1 : 0;
+#endif
+    const int output_failed = report_write_failed(stdout);
+    const int diagnostics_failed = report_write_failed(stderr);
+    return output_failed || diagnostics_failed ? 1 : 0;
 }
 
 
@@ -282,7 +306,12 @@ int main(int argc, char **argv)
         puts("Umicom C 0.1.0; arithmetic profile; bytecode format 1");
 #endif
         puts("Umicom C 0.1.0; arithmetic and comparison profiles; bytecode formats 1 and 2");
+        /* Keep the former exit for review. A version report is complete only
+         * when the host has delivered its text. */
+#if 0
         return 0;
+#endif
+        return report_write_failed(stdout) ? 2 : 0;
     }
     if (argc < 3) return usage();
     const int check = strcmp(argv[1], "check") == 0;
@@ -451,5 +480,11 @@ int main(int argc, char **argv)
         if (!binary) print_source_excerpt(input, length, diagnostic.source_offset);
         return 1;
     }
+    /* Keep the previous successful execution exit for review. The published
+     * report is part of successful CLI completion, including after compilation
+     * has already closed the new output file. */
+#if 0
     return 0;
+#endif
+    return report_write_failed(stdout) ? 2 : 0;
 }

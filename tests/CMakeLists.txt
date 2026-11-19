@@ -265,6 +265,19 @@ target_sources(umicom-c-test-report-failure PRIVATE ../tools/debugger.c)
                 TIMEOUT 15 LABELS "umicom-c;cli;comparison;output-failure")
         endforeach()
     endforeach()
+    foreach(_report_case IN ITEMS version profile check warnings run budget inspect)
+        set(_report_command "${_report_case}")
+        if(_report_case STREQUAL "version")
+            set(_report_command "--version")
+        endif()
+        foreach(_report_mode IN ITEMS control deny)
+            add_test(NAME "umicom.c.report.${_report_case}.${_report_mode}"
+                COMMAND umicom-c-test-report-failure "${_report_dir}/left.uc"
+                    "${_report_dir}/right.uc" "${_report_command}" "${_report_mode}")
+            set_tests_properties("umicom.c.report.${_report_case}.${_report_mode}" PROPERTIES
+                TIMEOUT 15 LABELS "umicom-c;cli;output-failure")
+        endforeach()
+    endforeach()
 endif()
 
 # Local storage has a separate source and runtime boundary. The latter target
