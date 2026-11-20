@@ -26,7 +26,10 @@ The compiler requires these words exactly. `main()`, additional functions, decla
 <!-- Earlier grammar retained for review:
 The compiler requires these entry-function words exactly. It also accepts initialized `int` locals, assignments and braced conditional statements before the final return. `main()`, additional functions, standalone nested blocks, loops, calls, includes, strings and floating-point values are not accepted.
 -->
+<!-- Earlier profile retained for review. A bounded counted form now extends the statement vocabulary.
 The compiler requires these entry-function words exactly. It accepts initialized int locals, assignments, braced conditionals and standalone compound statements before the final return. main(), additional functions, loops, calls, includes, strings and floating-point values remain unsupported. A standalone block introduces a lexical scope and executes whenever reached.
+-->
+The compiler requires these entry-function words exactly. It accepts initialized integer locals, assignments, braced conditionals, standalone blocks and the counted loop described below before the final return. A standalone block introduces a lexical scope and executes whenever reached. Additional functions, calls, includes, strings and floating-point values remain outside this profile.
 
 <!-- Earlier program production retained for review: program = "int" "main" "(" "void" ")" "{" "return" expression ";" "}" end -->
 
@@ -54,9 +57,12 @@ The grammar below is a compact way to describe the accepted shapes. A quoted ite
 
 <!-- Previous program/statement productions retained for grammar review: program ended immediately after the return semicolon; statement was local-declaration | update | conditional-statement | body. Empty statements extend those lists without a runtime instruction. -->
 
+<!-- Earlier statement production: statement  = local-declaration | update | conditional-statement | body | empty-statement. The counted form extends the existing alternatives. -->
+
 ```text
 program    = "int" "main" "(" "void" ")" "{" statement* "return" expression ";" empty-statement* "}" end
-statement  = local-declaration | update | conditional-statement | body | empty-statement
+statement  = local-declaration | update | conditional-statement | body | empty-statement | counted-for
+counted-for = "for" "(" "int" identifier "=" integer ";" identifier "<" integer ";" "++" identifier ")" body
 empty-statement = ";"
 local-declaration = ("const" "int" | "int" "const"?) declarator ("," declarator)* ";"
 declarator = identifier "=" expression
@@ -111,6 +117,39 @@ Assignment is a statement, not an expression. `&&` and `||` have short-circuit s
 Both operands execute before the comparison. `0 == (1 / 0)` fails at division; equality does not suppress a failing operand. Comparison itself does not subtract the operands, so comparing the minimum and maximum signed values does not overflow. One comparison consumes one instruction of the execution budget, like one addition.
 
 <!-- Before checked remainder, assignment-operator ended at "/=" and product accepted only "*" or "/". Those productions remain subsets of the current grammar. -->
+
+## Use a counted loop
+
+A counted loop runs its braced body once for each integer in a short literal range. The lower bound is included and the upper bound is excluded. Use the same name in the declaration, comparison and prefix increment.
+
+```c
+int main(void) {
+    int total = 0;
+    for (int step = 0; step < 4; ++step) {
+        if (step < 2) {
+            total += 7;
+        } else {
+            total += 14;
+        }
+    }
+    return total;
+}
+```
+
+The four steps add 7, 7, 14 and 14. Expect 42. Build the native command and run the example from the source directory.
+
+```powershell
+cmake -S . -B build -G Ninja
+cmake --build build --target umicom-c
+.\build\bin\umicom-c.exe check examples/counted_for.uc
+.\build\bin\umicom-c.exe run examples/counted_for.uc
+```
+
+Both bounds must be nonnegative integer literals and the range must contain one to sixteen values. The body can read the induction name within the braces. The compiler refuses writes to that name, references after the braces, dynamic bounds, descending or empty ranges, and unbraced bodies. The exact spelling `for` remains available as a local identifier in older sources. A statement starting with `for (` selects the counted grammar.
+
+The compiler checks the body once and emits an ordinary copy for each iteration. Forward branches inside a copied body keep their original meaning. This uses the same portable bytecode and execution budget as the rest of the program. Nested counted loops can exceed the instruction limit even when each individual range is small. If that happens, reduce the number of iterations or the number of statements. The checked host-input entry also accepts this syntax while still requiring a bound input artifact.
+
+[Umicom icon](assets/branding/umicom.ico)
 
 ## Numbers and failure
 

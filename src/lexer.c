@@ -163,6 +163,37 @@ static UmcStatus ascii_character(UmcLexer *lexer, UmcToken *token,
     return UMC_OK;
 }
 
+bool umc_lex_at_comment(const UmcLexer *lexer)
+{
+    /* Both consumers use an exact two-byte opener within the borrowed span. */
+    return lexer->position <= lexer->length && lexer->length - lexer->position >= 2U &&
+        lexer->source[lexer->position] == '/' &&
+        (lexer->source[lexer->position + 1U] == '/' || lexer->source[lexer->position + 1U] == '*');
+}
+
+UmcStatus umc_lex_skip_comment(UmcLexer *lexer, UmcDiagnostic *diagnostic)
+{
+    if (!umc_lex_at_comment(lexer))
+        return umc_fail(diagnostic, UMC_INVALID_ARGUMENT, lexer->position);
+    const size_t start = lexer->position;
+    const bool block = lexer->source[start + 1U] == '*';
+    lexer->position += 2U;
+    /* Preserve the compiler's comment boundary and error offsets. The line
+     * ending remains for the whitespace reader and position mapper. */
+    while (lexer->position < lexer->length) {
+        const char ch = lexer->source[lexer->position];
+        if (ch == '\0') return umc_fail(diagnostic, UMC_SYNTAX_ERROR, lexer->position);
+        if (!block && (ch == '\n' || ch == '\r')) return UMC_OK;
+        if (block && ch == '*' && lexer->length - lexer->position >= 2U &&
+                lexer->source[lexer->position + 1U] == '/') {
+            lexer->position += 2U;
+            return UMC_OK;
+        }
+        ++lexer->position;
+    }
+    return block ? umc_fail(diagnostic, UMC_SYNTAX_ERROR, start) : UMC_OK;
+}
+
 UmcStatus umc_lex_next(UmcLexer *lexer, UmcToken *token, UmcDiagnostic *diagnostic)
 {
     /* Source length was admitted by umc_compile. Lookahead always checks the
@@ -180,6 +211,9 @@ UmcStatus umc_lex_next(UmcLexer *lexer, UmcToken *token, UmcDiagnostic *diagnost
             ++lexer->position;
             continue;
         }
+        /* Keep the former inline traversal for review. The shared helper
+         * now provides the same extent checks to the checked translator. */
+#if 0
         if (c == '/' && lexer->length - lexer->position >= 2U) {
             const char next = lexer->source[lexer->position + 1U];
             if (next == '/') {
@@ -216,6 +250,12 @@ UmcStatus umc_lex_next(UmcLexer *lexer, UmcToken *token, UmcDiagnostic *diagnost
                 }
                 continue;
             }
+        }
+#endif
+        if (umc_lex_at_comment(lexer)) {
+            const UmcStatus status = umc_lex_skip_comment(lexer, diagnostic);
+            if (status != UMC_OK) return status;
+            continue;
         }
         break;
     }

@@ -37,11 +37,13 @@ The optional umicom-c-check-inputs build target calls the same verifier, but a b
 
 ## What is observed
 
-The inventory includes root CMake files, and files under src, include, tools, cmake, tests, examples and docs/assets/branding. It detects changed contents, added files, deleted files and renamed files. It hashes available configured package files and the Windows resource script. Available CMake, compiler driver, build tool, linker, archiver, indexer, resource compiler and toolchain-file paths are hashed without executing them. An absent optional tool is recorded as null.
+The inventory includes root CMake files, and files under src, include, tools, cmake, tests, examples and docs/assets/branding. It detects changed contents, added files, deleted files and renamed files. It hashes available configured package files and the Windows resource script. The record observes CMake, compiler driver, build tool, linker, archiver, indexer, resource compiler and toolchain files. An absent optional tool is recorded as null.
+
+On Linux, `/usr/bin/gcc` and `/usr/bin/ld` often select an installed executable through a symbolic link. The recipe keeps the selected path. `toolResolvedPaths` records the resolved file and `toolFiles` records its digest. The read-only check resolves the same declared paths again. If an executable link selects a different target, the check fails even when its bytes match the earlier file. Reconfigure once after updating a checkout that produced an earlier receipt layout.
 
 The recipe contains selected compiler flags, generator, platform, host and target values. These are resolved values from configuration, not a live reinterpretation of CMakeCache.txt. Ordinary documentation prose, compiler-loaded libraries, implicit SDK dependencies, environment effects, arbitrary launcher behavior and final binaries are outside this observation. The unknownInputs field records these limits. A matching compiler driver hash does not establish that its dynamically loaded dependencies match.
 
-Receipts and recipe files are limited to 16 MiB; the declared source inventory is limited to 4096 files. Linked input paths and control characters in serialized values are refused. The check is an observation of an ordinary local workspace, not protection from privileged modification or concurrent file replacement. Paths and flags can reveal local information: review records before sharing them.
+Receipts and recipe files are limited to 16 MiB. The declared source inventory is limited to 4096 files. Source, generated files, recipe files, receipts and declared toolchain scripts still require unlinked paths. Serialized values must exclude control characters. The observation describes the selected files in an ordinary local workspace. Its scope excludes concurrent replacement and changes to intermediate links that still resolve to the same file. Review local paths and flags before sharing the records.
 
 ## Exercise the refusal cases
 

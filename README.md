@@ -10,6 +10,18 @@ The first implementation accepts one integer-returning function, compiles it to 
 
 Start with [your first program](docs/first-program.md), then read the [language](docs/language.md), [bytecode](docs/bytecode.md) and [embedding](docs/embedding.md) guides. The independent Kernel program and optional Framework adapter reuse this runtime.
 
+The [browser integer runner](docs/browser-arithmetic.md) opens the same
+format-1 artifact in a standard browser worker and offers opt-in format-2
+comparisons, [format-3 local integers](docs/browser-locals.md) and
+[format-4 forward branches](docs/browser-branches.md). The optional
+[integer profile](docs/browser-integers.md) also admits formats 5 through 7 for
+remainder, bitwise operators and checked shifts. The worker validates the
+complete program before evaluating its signed 32-bit instructions.
+
+The [required-input entry](docs/int-input.md) lets the native CLI and a browser
+worker bind different signed integers to the same compiled artifact. It uses
+the existing checked local variables, instructions and execution budget.
+
 Regression sources cover compilation, wire decoding, arithmetic, output preservation and operation comparison. Build and test results must be qualified for the selected host or target; source presence alone is not a runtime pass.
 
 The [build and execution guide](docs/execution-guide.md) walks through a first
@@ -88,7 +100,9 @@ Use **%** to calculate a signed remainder or **%=** to update an initialized loc
 ## Signed unary complement
 
 Unary **~** flips a signed 32-bit value using existing checked arithmetic. Both signed endpoints work without a new bytecode version. Read [signed complement](docs/complement.md) for a five-instruction example, exact fuel, capability queries and consumer checks. <!-- Earlier unary-only limit retained for review: Binary bitwise operators, shifts and unsigned types remain outside the language profile. -->
-Binary bitwise operators are supported by the separate [bitwise extension](docs/bitwise.md); shifts and unsigned types remain outside the language profile.
+<!-- Earlier bitwise boundary retained for review: Binary bitwise operators are supported by the separate extension; shifts and unsigned types remain outside the language profile. -->
+Read the [binary bitwise](docs/bitwise.md) and [checked shift](docs/checked-shifts.md)
+guides for the signed 32-bit operations and their bounds.
 
 ## Standalone updates by one
 
@@ -132,3 +146,9 @@ Use budget source.uc or budget-bytecode program.umcb to count the shortest and l
 ## Boolean literal spellings
 
 Use exact lowercase true and false for integer values 1 and 0 in the bounded expression language. The [Boolean literal walkthrough](docs/boolean-literals.md) explains short-circuit behavior, reserved names, existing wire formats and the distinction from typed bool storage. This adds a compiler feature without changing the VM.
+
+## C and Java translation
+
+The compiler can translate one checked integer return function between C
+and Java. See [the translation exercise](docs/c-and-java-translation.md) for
+the supported declarations, round-trip commands and overflow check.

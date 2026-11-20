@@ -14,7 +14,8 @@ The file begins with eight bytes:
 <!-- Earlier profile row retained for review: | 4 | 1 | Minimum profile: 1 arithmetic, 2 comparisons, 3 local slots, 4 forward branches | -->
 <!-- Earlier format row: 1 for arithmetic; 2 when comparisons occur. -->
 <!-- Original format row: | 4 | 1 | Format version: 1 | -->
-| 5 | 1 | Reserved: must be zero |
+<!-- Earlier table row retained for review. Only the explicit input-aware entry extends the flag contract: | 5 | 1 | Reserved: must be zero | -->
+| 5 | 1 | Flags: 0 for an ordinary artifact, 1 for the required integer input entry |
 | 6 | 2 | Instruction count, least significant byte first |
 
 Each instruction occupies nine bytes:
@@ -25,7 +26,11 @@ Each instruction occupies nine bytes:
 | 1 | 4 | Signed 32-bit operand, two's-complement, least significant byte first |
 | 5 | 4 | Source byte offset |
 
-The exact length is `8 + count * 9`. A decoder rejects truncated records, trailing bytes, unknown versions, nonzero reserved flags and invalid instruction shapes.
+<!-- Earlier decoder wording retained for review. Ordinary decoding still uses the zero-flag contract. The exact length is `8 + count * 9`. A decoder rejects truncated records, trailing bytes, unknown versions, nonzero reserved flags and invalid instruction shapes. -->
+The exact length is `8 + count * 9`. Both decoders reject truncated records,
+trailing bytes, unknown versions and invalid instruction shapes. The ordinary
+decoder requires zero flags. Flag 1 requires the [explicit integer input
+binding](int-input.md).
 
 ## Operations
 

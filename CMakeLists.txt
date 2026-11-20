@@ -18,6 +18,7 @@ include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 option(UMICOM_C_BUILD_TOOLS "Build the hosted command-line compiler" ON)
 option(UMICOM_C_BUILD_TESTS "Build compiler and runtime regression coverage" ${PROJECT_IS_TOP_LEVEL})
+option(UMICOM_C_BUILD_BROWSER_TESTS "Check browser arithmetic against the hosted native compiler using Node.js" OFF)
 set(CMAKE_C_STANDARD 23)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
@@ -29,12 +30,23 @@ set_target_properties(umicom_c_runtime PROPERTIES EXPORT_NAME Runtime)
 
 add_library(umicom_c_compiler STATIC src/lexer.c src/compiler.c)
 target_sources(umicom_c_compiler PRIVATE src/source_regions.c)
+target_sources(umicom_c_compiler PRIVATE src/translate.c)
 # Compiler clients share bounded source presentation; the VM stays presentation-free.
 target_sources(umicom_c_compiler PRIVATE src/diagnostic_excerpt.c)
 target_link_libraries(umicom_c_compiler PUBLIC umicom_c_runtime)
 target_compile_features(umicom_c_compiler PUBLIC c_std_23)
 add_library(UmicomC::Compiler ALIAS umicom_c_compiler)
 set_target_properties(umicom_c_compiler PROPERTIES EXPORT_NAME Compiler)
+# Browser hosts consume the same worker modules as the compiler's fixtures.
+# Publish their source-build location as optional metadata for SDK clients.
+set_property(TARGET umicom_c_compiler PROPERTY UMICOM_C_BROWSER_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/browser")
+set(UMICOM_C_BROWSER_INSTALL_DIR "${CMAKE_INSTALL_DATADIR}/umicom-c/browser")
+# Consumers can require translation support without probing a compiler version
+# shared with SDK releases that export only the base compiler.
+add_library(umicom_c_translation INTERFACE)
+target_link_libraries(umicom_c_translation INTERFACE umicom_c_compiler)
+add_library(UmicomC::Translation ALIAS umicom_c_translation)
+set_target_properties(umicom_c_translation PROPERTIES EXPORT_NAME Translation)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(umicom_c_compiler PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
 endif()
@@ -62,12 +74,14 @@ endif()
 
 install(TARGETS umicom_c_runtime umicom_c_compiler EXPORT UmicomCTargets
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+install(TARGETS umicom_c_translation EXPORT UmicomCTargets)
 install(DIRECTORY include/umicom_c DESTINATION include)
 install(EXPORT UmicomCTargets NAMESPACE UmicomC::
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/UmicomC")
 configure_package_config_file(cmake/UmicomCConfig.cmake.in
     "${CMAKE_CURRENT_BINARY_DIR}/UmicomCConfig.cmake"
-    INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/UmicomC")
+    INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/UmicomC"
+    PATH_VARS UMICOM_C_BROWSER_INSTALL_DIR)
 write_basic_package_version_file("${CMAKE_CURRENT_BINARY_DIR}/UmicomCConfigVersion.cmake"
     VERSION "${PROJECT_VERSION}" COMPATIBILITY SameMajorVersion)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/UmicomCConfig.cmake"
@@ -91,12 +105,27 @@ if(UMICOM_C_BUILD_TESTS)
     include(CTest)
     if(BUILD_TESTING)
         add_subdirectory(tests)
+        if(UMICOM_C_BUILD_BROWSER_TESTS)
+            if(NOT TARGET umicom-c)
+                message(FATAL_ERROR "Browser conformance needs the hosted umicom-c tool")
+            endif()
+            find_program(UMICOM_C_NODE_EXECUTABLE NAMES node nodejs REQUIRED)
+            add_test(NAME umicom-c.browser.arithmetic
+                COMMAND "${CMAKE_COMMAND}" -E env "UMICOM_C_BROWSER_TEST_COMPILER=$<TARGET_FILE:umicom-c>"
+                    "${UMICOM_C_NODE_EXECUTABLE}" --test "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_browser_worker.mjs")
+            set_tests_properties(umicom-c.browser.arithmetic PROPERTIES
+                # The format matrix starts a hosted compiler and VM for each
+                # case. Allow their process startup time on a loaded host.
+                TIMEOUT 300 LABELS "umicom-c;browser;bytecode")
+        endif()
     endif()
 endif()
 
 # Installed consumers receive the same licence and language limits as source readers.
 install(FILES LICENSE README.md DESTINATION "${CMAKE_INSTALL_DATADIR}/doc/umicom-c")
 install(DIRECTORY docs/ DESTINATION "${CMAKE_INSTALL_DATADIR}/doc/umicom-c")
+install(DIRECTORY browser/ DESTINATION "${UMICOM_C_BROWSER_INSTALL_DIR}"
+    FILES_MATCHING PATTERN "*.mjs")
 
 # Record configuration inputs only after the full standalone graph is known.
 # This adds no dependency to the independently embedded Kernel runtime.

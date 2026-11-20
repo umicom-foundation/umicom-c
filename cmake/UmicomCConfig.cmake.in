@@ -15,6 +15,15 @@
 @PACKAGE_INIT@
 include("${CMAKE_CURRENT_LIST_DIR}/UmicomCTargets.cmake")
 
+# Locate the shipped worker relative to the package prefix after relocation.
+# This is optional metadata. Native compiler clients need no browser runtime.
+get_target_property(_umicom_c_imported UmicomC::Compiler IMPORTED)
+if(_umicom_c_imported)
+    set_property(TARGET UmicomC::Compiler PROPERTY UMICOM_C_BROWSER_DIRECTORY
+        "@PACKAGE_UMICOM_C_BROWSER_INSTALL_DIR@")
+endif()
+unset(_umicom_c_imported)
+
 # A CMake component is an explicit request for an exported target. Merely
 # loading UmicomCTargets does not set the per-component *_FOUND variables used
 # by check_required_components. Recompute them for every discovery so a prior

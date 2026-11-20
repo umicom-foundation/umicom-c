@@ -13,6 +13,7 @@
  * MIT
  *---------------------------------------------------------------------------*/
 #include "internal.h"
+#include "umicom_c/int_input.h"
 #include "umicom_c/profile.h"
 #include "umicom_c/source_check.h"
 
@@ -1055,6 +1056,37 @@ static void local_statement(UmcParser *parser, size_t depth)
  * both selected and unselected source paths are still checked. */
 static void if_statement(UmcParser *parser, size_t depth);
 static void block_statement(UmcParser *parser, size_t depth);
+static void counted_for_statement(UmcParser *parser, size_t depth);
+
+static bool is_counted_for(const UmcParser *parser)
+{
+    /* Recognize the statement as a unit. Existing source can still use the
+     * spelling "for" as a local where it was previously an ordinary name. */
+    const UmcToken token = parser->token;
+    if (token.kind != UMC_TOKEN_IDENTIFIER || token.length != 3U) return false;
+    const char *text = parser->lexer.source + token.offset;
+    if (text[0] != 'f' || text[1] != 'o' || text[2] != 'r') return false;
+    UmcLexer lookahead = parser->lexer;
+    UmcToken next;
+    return umc_lex_next(&lookahead, &next, NULL) == UMC_OK && next.kind == UMC_TOKEN_LEFT;
+}
+
+static bool statement(UmcParser *parser, size_t depth)
+{
+    /* Use the same statement vocabulary at the entry and inside braces.
+     * The caller retains ownership of its scope and terminating token. */
+    if (is_counted_for(parser)) counted_for_statement(parser, depth);
+    else if (parser->token.kind == UMC_TOKEN_IDENTIFIER ||
+             parser->token.kind == UMC_TOKEN_INT || parser->token.kind == UMC_TOKEN_CONST)
+        local_statement(parser, depth);
+    else if (parser->token.kind == UMC_TOKEN_INCREMENT || parser->token.kind == UMC_TOKEN_DECREMENT)
+        prefix_increment_statement(parser);
+    else if (parser->token.kind == UMC_TOKEN_IF) if_statement(parser, depth);
+    else if (parser->token.kind == UMC_TOKEN_OPEN) block_statement(parser, depth);
+    else if (parser->token.kind == UMC_TOKEN_SEMICOLON) advance(parser);
+    else return false;
+    return true;
+}
 /* Conditional blocks now own bounded lexical names. Save and restore the visible symbol count around the existing statement parser, retaining checked initialization, read-only qualifiers and runtime control-flow admission. The earlier update-only body remains for owner review. The former implementation is retained for owner review. */
 #if 0
 static void if_body(UmcParser *parser, size_t depth)
@@ -1078,6 +1110,9 @@ static void if_body(UmcParser *parser, size_t depth)
 {
     const size_t outer_count = parser->local_count;
     expect(parser, UMC_TOKEN_OPEN);
+    /* The common statement dispatcher now admits the same counted loop
+     * inside every scope. Retain the preceding body dispatcher for review. */
+#if 0
     while (parser->status == UMC_OK) {
         if (parser->token.kind == UMC_TOKEN_IDENTIFIER ||
             parser->token.kind == UMC_TOKEN_INT || parser->token.kind == UMC_TOKEN_CONST)
@@ -1090,6 +1125,8 @@ static void if_body(UmcParser *parser, size_t depth)
         else if (parser->token.kind == UMC_TOKEN_SEMICOLON) advance(parser);
         else break;
     }
+#endif
+    while (parser->status == UMC_OK && statement(parser, depth)) {}
     expect(parser, UMC_TOKEN_CLOSE);
     /* Lexical names end at the brace, even when compilation has failed.
      * Later disjoint scopes may reuse these VM slots only through another
@@ -1166,6 +1203,106 @@ static void if_statement(UmcParser *parser, size_t depth)
         else if_body(parser, depth + 1U);
         patch_forward(parser, join);
     } else patch_forward(parser, false_branch);
+}
+
+static int32_t counted_for_literal(UmcParser *parser)
+{
+    if (parser->status != UMC_OK) return 0;
+    const UmcToken token = parser->token;
+    /* Integer tokens also carry character and Boolean values. A loop range
+     * requires a numeric spelling that begins with a digit. */
+    if (token.kind != UMC_TOKEN_INTEGER || parser->lexer.source[token.offset] < '0' ||
+        parser->lexer.source[token.offset] > '9') {
+        local_error(parser, token.offset, "expected a nonnegative loop-bound integer literal");
+        return 0;
+    }
+    advance(parser);
+    return token.integer;
+}
+
+static void counted_for_name(UmcParser *parser, const UmcToken *name)
+{
+    if (parser->status != UMC_OK) return;
+    const UmcToken current = parser->token;
+    if (current.kind != UMC_TOKEN_IDENTIFIER || current.length != name->length) {
+        local_error(parser, current.offset, "loop header must use the declared loop integer");
+        return;
+    }
+    /* The repeated header name must identify the exact declaration above. */
+    for (size_t i = 0U; i < name->length; ++i) {
+        if (parser->lexer.source[current.offset + i] != parser->lexer.source[name->offset + i]) {
+            local_error(parser, current.offset, "loop header must use the declared loop integer");
+            return;
+        }
+    }
+    advance(parser);
+}
+
+static void counted_for_statement(UmcParser *parser, size_t depth)
+{
+    const size_t offset = parser->token.offset;
+    if (depth >= UMC_PARSE_DEPTH_LIMIT) {
+        parser->status = umc_fail(parser->diagnostic, UMC_DEPTH_LIMIT, offset);
+        return;
+    }
+    advance(parser);
+    expect(parser, UMC_TOKEN_LEFT);
+    expect(parser, UMC_TOKEN_INT);
+    const UmcToken name = parser->token;
+    expect(parser, UMC_TOKEN_IDENTIFIER);
+    if (parser->status != UMC_OK) return;
+    if (find_local(parser, &name) != UMC_LOCAL_LIMIT) {
+        local_error(parser, name.offset, "duplicate local integer declaration");
+        return;
+    }
+    if (parser->local_count == UMC_LOCAL_LIMIT) {
+        parser->status = umc_fail(parser->diagnostic, UMC_LOCAL_CAPACITY, name.offset);
+        return;
+    }
+    expect(parser, UMC_TOKEN_ASSIGN);
+    const int32_t first = counted_for_literal(parser);
+    expect(parser, UMC_TOKEN_SEMICOLON);
+    counted_for_name(parser, &name);
+    expect(parser, UMC_TOKEN_LESS);
+    const size_t limit_offset = parser->token.offset;
+    const int32_t limit = counted_for_literal(parser);
+    expect(parser, UMC_TOKEN_SEMICOLON);
+    expect(parser, UMC_TOKEN_INCREMENT);
+    counted_for_name(parser, &name);
+    expect(parser, UMC_TOKEN_RIGHT);
+    if (parser->status != UMC_OK) return;
+    if (limit <= first || (uint32_t)(limit - first) > UMC_COUNTED_FOR_LIMIT) {
+        local_error(parser, limit_offset, "counted for must run from one to sixteen iterations");
+        return;
+    }
+
+    /* The header owns the induction integer. A body may read it, while the
+     * existing read-only rule refuses a write that would change the range. */
+    const size_t slot = parser->local_count++;
+    parser->locals[slot].offset = name.offset;
+    parser->locals[slot].length = name.length;
+    parser->locals[slot].read_only = true;
+    parser->locals[slot].warning_index = SIZE_MAX; /* The header already uses this name. */
+    emit(parser, UMC_PUSH, first, name.offset);
+    emit(parser, UMC_STORE_LOCAL, (int32_t)slot, name.offset);
+    const size_t body_start = parser->count;
+    if_body(parser, depth + 1U);
+    const size_t body_end = parser->count;
+
+    /* Parse the body once so warnings and lexical identities are not
+     * repeated. Copy only its emitted instructions, rebasing its existing
+     * forward branches to equivalent instructions in the new iteration. */
+    for (int32_t value = first + 1; parser->status == UMC_OK && value < limit; ++value) {
+        emit(parser, UMC_PUSH, value, name.offset);
+        emit(parser, UMC_STORE_LOCAL, (int32_t)slot, name.offset);
+        const int32_t shift = (int32_t)(parser->count - body_start);
+        for (size_t index = body_start; parser->status == UMC_OK && index < body_end; ++index) {
+            UmcInstruction copy = parser->output[index];
+            if (copy.opcode == UMC_JUMP || copy.opcode == UMC_JUMP_IF_ZERO) copy.operand += shift;
+            emit(parser, copy.opcode, copy.operand, copy.source_offset);
+        }
+    }
+    parser->local_count = slot;
 }
 
 /* Compile initialized declarations and assignments before the final return using one per-call symbol table. The predecessor remains disabled for review. */
@@ -1288,8 +1425,42 @@ UmcStatus umc_compile(const char *source, size_t length,
     return parser.status;
 }
 #endif
+static void int_input_entry(UmcParser *parser)
+{
+    static const char entry_name[] = "umicom_run";
+    if (parser->status != UMC_OK) return;
+    const UmcToken entry = parser->token;
+    if (entry.kind != UMC_TOKEN_IDENTIFIER || entry.length != sizeof entry_name - 1U) {
+        local_error(parser, entry.offset, "expected the umicom_run entry point");
+        return;
+    }
+    for (size_t i = 0U; i < entry.length; ++i) {
+        if (parser->lexer.source[entry.offset + i] != entry_name[i]) {
+            local_error(parser, entry.offset, "expected the umicom_run entry point");
+            return;
+        }
+    }
+    advance(parser);
+    expect(parser, UMC_TOKEN_LEFT);
+    expect(parser, UMC_TOKEN_INT);
+    const UmcToken parameter = parser->token;
+    expect(parser, UMC_TOKEN_IDENTIFIER);
+    expect(parser, UMC_TOKEN_RIGHT);
+    if (parser->status != UMC_OK) return;
+
+    /* Parameter references use the existing local binding. The explicit input
+     * artifact records that the first push must be bound by its host. */
+    parser->locals[0].offset = parameter.offset;
+    parser->locals[0].length = parameter.length;
+    parser->locals[0].warning_index = UMC_SOURCE_WARNING_LIMIT;
+    parser->local_count = 1U;
+    emit(parser, UMC_PUSH, 0, parameter.offset);
+    emit(parser, UMC_STORE_LOCAL, 0, parameter.offset);
+}
+
 static UmcStatus compile_source(const char *source, size_t length,
-    UmcInstruction *output, size_t capacity, size_t *count, UmcDiagnostic *diagnostic, UmcWarningState *warnings)
+    UmcInstruction *output, size_t capacity, size_t *count, UmcDiagnostic *diagnostic,
+    UmcWarningState *warnings, bool int_input)
 {
     if (count != NULL) *count = 0U;
     (void)umc_fail(diagnostic, UMC_OK, 0U);
@@ -1309,10 +1480,13 @@ static UmcStatus compile_source(const char *source, size_t length,
     };
     advance(&parser);
     expect(&parser, UMC_TOKEN_INT);
-    expect(&parser, UMC_TOKEN_MAIN);
-    expect(&parser, UMC_TOKEN_LEFT);
-    expect(&parser, UMC_TOKEN_VOID);
-    expect(&parser, UMC_TOKEN_RIGHT);
+    if (int_input) int_input_entry(&parser);
+    else {
+        expect(&parser, UMC_TOKEN_MAIN);
+        expect(&parser, UMC_TOKEN_LEFT);
+        expect(&parser, UMC_TOKEN_VOID);
+        expect(&parser, UMC_TOKEN_RIGHT);
+    }
     expect(&parser, UMC_TOKEN_OPEN);
     /* Preserve the straight-line statement loop for comparison. The active
      * dispatcher keeps its declarations/assignments and adds braced if/else
@@ -1322,6 +1496,9 @@ static UmcStatus compile_source(const char *source, size_t length,
         (parser.token.kind == UMC_TOKEN_INT || parser.token.kind == UMC_TOKEN_IDENTIFIER))
         local_statement(&parser);
 #endif
+    /* All scopes share the counted-statement dispatcher. Keep this earlier
+     * top-level dispatch for reviewing the unchanged statement ordering. */
+#if 0
     while (parser.status == UMC_OK) {
 /* Top-level updates reuse the initialized local owner and keep the required final return. The former implementation is retained for owner review. */
 #if 0
@@ -1343,6 +1520,8 @@ static UmcStatus compile_source(const char *source, size_t length,
         else if (parser.token.kind == UMC_TOKEN_SEMICOLON) advance(&parser);
         else break;
     }
+#endif
+    while (parser.status == UMC_OK && statement(&parser, 0U)) {}
     const size_t return_offset = parser.token.offset;
     expect(&parser, UMC_TOKEN_RETURN);
     expression(&parser, 0U);
@@ -1368,7 +1547,23 @@ static UmcStatus compile_source(const char *source, size_t length,
 UmcStatus umc_compile(const char *source, size_t length,
     UmcInstruction *output, size_t capacity, size_t *count, UmcDiagnostic *diagnostic)
 {
-    return compile_source(source, length, output, capacity, count, diagnostic, NULL);
+    return compile_source(source, length, output, capacity, count, diagnostic, NULL, false);
+}
+
+UmcStatus umc_compile_int_input(const char *source, size_t length, uint8_t *output,
+    size_t capacity, size_t *size, UmcDiagnostic *diagnostic)
+{
+    if (size == NULL) return umc_fail(diagnostic, UMC_INVALID_ARGUMENT, 0U);
+    *size = 0U;
+    if (output == NULL) return umc_fail(diagnostic, UMC_INVALID_ARGUMENT, 0U);
+    UmcInstruction instructions[UMC_PROGRAM_LIMIT];
+    size_t count = 0U;
+    UmcStatus status = compile_source(source, length, instructions, UMC_PROGRAM_LIMIT, &count,
+        diagnostic, NULL, true);
+    if (status != UMC_OK) return status;
+    status = umc_encode(instructions, count, output, capacity, size, diagnostic);
+    if (status == UMC_OK) output[5] = UMC_INT_INPUT_BYTECODE_FLAG;
+    return status;
 }
 
 UmcStatus umc_check_source(const char *source, size_t length,
@@ -1379,7 +1574,7 @@ UmcStatus umc_check_source(const char *source, size_t length,
     UmcWarningState warnings = {0};
     size_t count = 0U;
     UmcStatus status = compile_source(source, length, instructions,
-        UMC_PROGRAM_LIMIT, &count, diagnostic, &warnings);
+        UMC_PROGRAM_LIMIT, &count, diagnostic, &warnings, false);
     if (status != UMC_OK) return status;
 
     /* Publication begins only after complete grammar and bytecode admission.

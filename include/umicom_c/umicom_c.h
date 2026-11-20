@@ -51,6 +51,8 @@ extern "C" {
 #define UMC_PROGRAM_LIMIT 256U
 #define UMC_STACK_LIMIT 64U
 #define UMC_PARSE_DEPTH_LIMIT 64U
+/* A counted source loop expands to ordinary checked forward instructions. */
+#define UMC_COUNTED_FOR_LIMIT 16U
 #define UMC_BYTECODE_HEADER_SIZE 8U
 #define UMC_BYTECODE_RECORD_SIZE 9U
 #define UMC_BYTECODE_LIMIT (UMC_BYTECODE_HEADER_SIZE + UMC_PROGRAM_LIMIT * UMC_BYTECODE_RECORD_SIZE)

@@ -13,6 +13,7 @@
  * MIT
  *---------------------------------------------------------------------------*/
 #include "internal.h"
+#include "umicom_c/int_input.h"
 #include <limits.h>
 
 static void put_u32(uint8_t *output, uint32_t value)
@@ -397,8 +398,9 @@ UmcStatus umc_decode(const uint8_t *bytes, size_t length,
     return UMC_OK;
 }
 #endif
-UmcStatus umc_decode(const uint8_t *bytes, size_t length,
-    UmcInstruction *output, size_t capacity, size_t *count, UmcDiagnostic *diagnostic)
+static UmcStatus decode_bytecode(const uint8_t *bytes, size_t length,
+    UmcInstruction *output, size_t capacity, size_t *count, UmcDiagnostic *diagnostic,
+    uint8_t expected_flags)
 {
     if (count != NULL) *count = 0U;
     if (bytes == NULL || output == NULL || count == NULL) {
@@ -413,9 +415,11 @@ UmcStatus umc_decode(const uint8_t *bytes, size_t length,
     }
 
 #endif
+    /* The ordinary decoder still requires zero. The input-aware boundary
+     * explicitly asks for the one required-input flag before binding. */
     if (length < UMC_BYTECODE_HEADER_SIZE || length > UMC_BYTECODE_LIMIT ||
         bytes[0] != 'U' || bytes[1] != 'M' || bytes[2] != 'C' || bytes[3] != 'B' ||
-        (bytes[4] != 1U && bytes[4] != 2U && bytes[4] != 3U && bytes[4] != 4U && bytes[4] != 5U && bytes[4] != 6U && bytes[4] != 7U) || bytes[5] != 0U) {
+        (bytes[4] != 1U && bytes[4] != 2U && bytes[4] != 3U && bytes[4] != 4U && bytes[4] != 5U && bytes[4] != 6U && bytes[4] != 7U) || bytes[5] != expected_flags) {
         return umc_fail(diagnostic, UMC_BAD_BYTECODE, 0U);
     }
     const size_t records = (size_t)bytes[6] | ((size_t)bytes[7] << 8U);
@@ -441,5 +445,39 @@ UmcStatus umc_decode(const uint8_t *bytes, size_t length,
     if (bytes[4] != program_wire_version(output, records))
         return umc_fail(diagnostic, UMC_BAD_BYTECODE, 0U);
     *count = records;
+    return UMC_OK;
+}
+
+UmcStatus umc_decode(const uint8_t *bytes, size_t length,
+    UmcInstruction *output, size_t capacity, size_t *count, UmcDiagnostic *diagnostic)
+{
+    return decode_bytecode(bytes, length, output, capacity, count, diagnostic, 0U);
+}
+
+UmcStatus umc_bind_int_input_bytecode(const uint8_t *bytes, size_t length, int32_t value,
+    UmcInstruction *output, size_t capacity, size_t *count, UmcDiagnostic *diagnostic)
+{
+    if (count == NULL) return umc_fail(diagnostic, UMC_INVALID_ARGUMENT, 0U);
+    *count = 0U;
+    if (output == NULL) return umc_fail(diagnostic, UMC_INVALID_ARGUMENT, 0U);
+    UmcInstruction staged[UMC_PROGRAM_LIMIT];
+    size_t decoded = 0U;
+    const UmcStatus status = decode_bytecode(bytes, length, staged, UMC_PROGRAM_LIMIT,
+        &decoded, diagnostic, UMC_INT_INPUT_BYTECODE_FLAG);
+    if (status != UMC_OK) return status;
+    if (decoded < 3U || staged[0].opcode != UMC_PUSH || staged[0].operand != 0 ||
+        staged[1].opcode != UMC_STORE_LOCAL || staged[1].operand != 0)
+        return umc_fail(diagnostic, UMC_BAD_BYTECODE, 0U);
+    if (capacity < decoded) return umc_fail(diagnostic, UMC_BUFFER_TOO_SMALL, 0U);
+
+    /* Changing only the int32 operand of a validated PUSH preserves stack,
+     * local and control-flow admission. The template is never edited. */
+    staged[0].operand = value;
+    for (size_t i = 0U; i < decoded; ++i) {
+        output[i].opcode = staged[i].opcode;
+        output[i].operand = staged[i].operand;
+        output[i].source_offset = staged[i].source_offset;
+    }
+    *count = decoded;
     return UMC_OK;
 }

@@ -21,6 +21,8 @@
 #include "umicom_c/diagnostic_excerpt.h"
 #include "umicom_c/comparison.h"
 #include "umicom_c/source_check.h"
+#include "umicom_c/translate.h"
+#include "umicom_c/int_input.h"
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
@@ -97,7 +99,10 @@ static int usage(void)
           "  umicom-c budget-bytecode program.umcb\n"
           "  umicom-c run source.uc [--max-steps N]\n"
           "  umicom-c compile source.uc new-output.umcb\n"
+          "  umicom-c compile-input source.uc new-output.umcb\n"
+          "  umicom-c translate c-to-java|java-to-c input new-output\n"
           "  umicom-c exec program.umcb [--max-steps N]\n"
+          "  umicom-c exec-input program.umcb SIGNED_INTEGER [--max-steps N]\n"
           "  umicom-c disassemble program.umcb\n"
           "  umicom-c trace source.uc [--max-steps N]\n"
           "  umicom-c trace-bytecode program.umcb [--max-steps N]\n"
@@ -132,6 +137,66 @@ static int step_limit(const char *text, size_t *limit)
     if (value == 0U) return 0;
     *limit = value;
     return 1;
+}
+
+static int parse_int_input(const char *text, int32_t *out)
+{
+    const int negative = text[0] == '-';
+    if (negative || text[0] == '+') ++text;
+    if (text[0] == '\0') return 0;
+    const uint32_t limit = (uint32_t)INT32_MAX + (negative ? 1U : 0U);
+    uint32_t magnitude = 0U;
+    for (; *text != '\0'; ++text) {
+        if (*text < '0' || *text > '9') return 0;
+        const uint32_t digit = (uint32_t)(*text - '0');
+        if (magnitude > (limit - digit) / 10U) return 0;
+        magnitude = magnitude * 10U + digit;
+    }
+    /* Keep the most-negative input representable without negating INT32_MIN. */
+    if (negative && magnitude != 0U) *out = -(int32_t)(magnitude - 1U) - 1;
+    else *out = (int32_t)magnitude;
+    return 1;
+}
+
+static int compile_int_input_file(const char *path, const char *destination)
+{
+    uint8_t source[UMC_SOURCE_LIMIT];
+    uint8_t encoded[UMC_BYTECODE_LIMIT];
+    size_t length = 0U;
+    size_t size = 0U;
+    UmcDiagnostic diagnostic;
+    if (!read_file(path, source, sizeof source, &length)) return 2;
+    const UmcStatus status = umc_compile_int_input((const char *)source, length,
+        encoded, sizeof encoded, &size, &diagnostic);
+    if (status != UMC_OK) {
+        umc_locate_diagnostic((const char *)source, length, &diagnostic);
+        fprintf(stderr, "%s:%zu:%zu: %s\n", path, diagnostic.line, diagnostic.column, diagnostic.message);
+        print_source_excerpt(source, length, diagnostic.source_offset);
+        return 1;
+    }
+    if (!save_new_file(destination, encoded, size)) return 2;
+    printf("Compiled a required-input artifact to %s\n", destination);
+    return report_write_failed(stdout) ? 2 : 0;
+}
+
+static int execute_int_input_file(const char *path, int32_t input, size_t fuel)
+{
+    uint8_t encoded[UMC_BYTECODE_LIMIT];
+    UmcInstruction program[UMC_PROGRAM_LIMIT];
+    UmcDiagnostic diagnostic;
+    UmcResult result;
+    size_t size = 0U;
+    size_t count = 0U;
+    if (!read_file(path, encoded, sizeof encoded, &size)) return 2;
+    UmcStatus status = umc_bind_int_input_bytecode(encoded, size, input, program,
+        UMC_PROGRAM_LIMIT, &count, &diagnostic);
+    if (status == UMC_OK) status = umc_execute(program, count, fuel, &result, &diagnostic);
+    if (status != UMC_OK) {
+        fprintf(stderr, "%s: source-byte=%zu: %s\n", path, diagnostic.source_offset, diagnostic.message);
+        return 1;
+    }
+    printf("Result: %" PRId32 "\nInstructions: %zu\n", result.value, result.instructions_executed);
+    return report_write_failed(stdout) ? 2 : 0;
 }
 
 /* This command does not open a source file or execute a program. Separate
@@ -314,6 +379,57 @@ int main(int argc, char **argv)
         return report_write_failed(stdout) ? 2 : 0;
     }
     if (argc < 3) return usage();
+    if (strcmp(argv[1], "compile-input") == 0)
+        return argc == 4 ? compile_int_input_file(argv[2], argv[3]) : usage();
+    if (strcmp(argv[1], "exec-input") == 0) {
+        if (argc != 4 && argc != 6) return usage();
+        int32_t input = 0;
+        if (!parse_int_input(argv[3], &input)) {
+            fputs("The input must be a signed 32-bit decimal integer.\n", stderr);
+            return 2;
+        }
+        size_t fuel = UMC_PROGRAM_LIMIT;
+        if (argc == 6 && (strcmp(argv[4], "--max-steps") != 0 || !step_limit(argv[5], &fuel))) {
+            fprintf(stderr, "--max-steps requires a decimal integer from 1 to %u.\n",
+                (unsigned)UMC_PROGRAM_LIMIT);
+            return 2;
+        }
+        return execute_int_input_file(argv[2], input, fuel);
+    }
+    if (strcmp(argv[1], "translate") == 0) {
+        if (argc != 5) return usage();
+        UmcTranslationDirection direction;
+        if (strcmp(argv[2], "c-to-java") == 0) direction = UMC_TRANSLATE_C_TO_JAVA;
+        else if (strcmp(argv[2], "java-to-c") == 0) direction = UMC_TRANSLATE_JAVA_TO_C;
+        else return usage();
+        /* The compiler owns the portable subset and target output. The
+         * command shares the same bounded reader and exclusive writer used
+         * for checked Umicom C source and bytecode files. */
+        uint8_t input[UMC_SOURCE_LIMIT];
+        /* The extended API keeps the earlier expression mode internally.
+         * Retain the old output extent here for the compatibility review. */
+#if 0
+        char output[UMC_TRANSLATION_OUTPUT_CAPACITY];
+#endif
+        char output[UMC_TRANSLATION_FUNCTION_OUTPUT_CAPACITY];
+        size_t input_size;
+        size_t output_size;
+        UmcDiagnostic diagnostic;
+        if (!read_file(argv[3], input, sizeof input, &input_size)) return 1;
+        /* Retain the original call while the checked function profile adds
+         * local statements through the same hosted command. */
+#if 0
+        const UmcStatus status = umc_translate_integer_answer(direction,
+            (const char *)input, input_size, output, sizeof output, &output_size, &diagnostic);
+#endif
+        const UmcStatus status = umc_translate_integer_function(direction,
+            (const char *)input, input_size, output, sizeof output, &output_size, &diagnostic);
+        if (status != UMC_OK) {
+            fprintf(stderr, "%zu:%zu: %s\n", diagnostic.line, diagnostic.column, diagnostic.message);
+            return 1;
+        }
+        return save_new_file(argv[4], (const uint8_t *)output, output_size) ? 0 : 1;
+    }
     const int check = strcmp(argv[1], "check") == 0;
     const int run = strcmp(argv[1], "run") == 0;
     const int compile = strcmp(argv[1], "compile") == 0;

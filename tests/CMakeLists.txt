@@ -22,7 +22,22 @@ foreach(group IN ITEMS compiler vm bytecode)
     add_test(NAME "umicom.c.${group}" COMMAND "umicom-c-test-${group}")
     set_tests_properties("umicom.c.${group}" PROPERTIES LABELS "umicom-c;unit")
 endforeach()
+add_executable(umicom-c-test-int-input test_int_input.c)
+target_link_libraries(umicom-c-test-int-input PRIVATE UmicomC::Compiler)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-int-input PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+foreach(case IN ITEMS values statements legacy prefix flags capacity source arithmetic)
+    add_test(NAME "umicom.c.int_input.${case}" COMMAND umicom-c-test-int-input "${case}")
+    set_tests_properties("umicom.c.int_input.${case}" PROPERTIES TIMEOUT 15 LABELS "umicom-c;int-input;unit")
+endforeach()
 if(TARGET umicom-c)
+    add_test(NAME umicom.c.cli-int-input
+        COMMAND "${CMAKE_COMMAND}" "-DTOOL=$<TARGET_FILE:umicom-c>"
+            "-DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/../examples/checked-input.uc"
+            "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/int-input-artifacts"
+            -P "${CMAKE_CURRENT_LIST_DIR}/check_int_input_cli.cmake")
+    set_tests_properties(umicom.c.cli-int-input PROPERTIES LABELS "umicom-c;int-input;cli" TIMEOUT 100)
     add_test(NAME umicom.c.cli
         COMMAND "${CMAKE_COMMAND}" "-DTOOL=$<TARGET_FILE:umicom-c>"
         "-DWORK=${CMAKE_CURRENT_BINARY_DIR}/cli-artifacts"
@@ -42,6 +57,17 @@ if(TARGET umicom-c)
 endif()
 
 # Instruction identity remains independent of comment and whitespace locations.
+add_executable(umicom-c-test-translation test_translation.c)
+target_link_libraries(umicom-c-test-translation PRIVATE UmicomC::Compiler)
+foreach(case roundtrip empty extra trailing octal literal comment operator overflow division capacity java-shape
+        function-roundtrip function-uninitialized function-undeclared function-reserved-java function-reserved-c
+        function-literal function-increment function-overflow function-capacity function-statement-limit
+        function-comment-expression function-comment-locals function-comment-open function-comment-unicode
+        function-comment-splice function-comment-outside function-comment-trailing function-comment-capacity function-comment-arithmetic)
+    add_test(NAME "umicom.c.translation.${case}" COMMAND umicom-c-test-translation "${case}")
+    set_tests_properties("umicom.c.translation.${case}" PROPERTIES TIMEOUT 10 LABELS "umicom-c;translation")
+endforeach()
+
 add_executable(umicom-c-test-comparison test_comparison.c)
 target_link_libraries(umicom-c-test-comparison PRIVATE UmicomC::Compiler)
 add_test(NAME umicom.c.comparison COMMAND umicom-c-test-comparison)
@@ -207,11 +233,15 @@ endif()
 # Configure-input identity is deliberately separate from binary provenance.
 # Mutation fixtures use synthetic paths; they never rewrite the checkout or
 # execute the synthetic tool whose bytes they compare.
+set(tool_alias_fixtures)
+if(UNIX)
+    list(APPEND tool_alias_fixtures linked-tool linked-tool-ancestor retargeted-tool linked-toolchain linked-source)
+endif()
 foreach(case IN ITEMS unchanged literal-configuration-token source added-source deleted-source renamed-source
     header configuration example resource generated deleted-generated new-generated
     recipe tool missing-tool missing-receipt malformed-receipt trailing-receipt
     changed-receipt oversized-receipt receipt-as-code missing-recipe nonobject-recipe
-    prose-outside-scope binary-outside-scope)
+    prose-outside-scope binary-outside-scope ${tool_alias_fixtures})
     add_test(NAME "umicom.c.input-identity.${case}"
         COMMAND "${CMAKE_COMMAND}"
             "-DMODULE=${PROJECT_SOURCE_DIR}/cmake/InputIdentity.cmake"
@@ -351,6 +381,17 @@ endif()
 foreach(case IN ITEMS values faults refusals bounds wire-trace)
     add_test(NAME "umicom.c.conditional.${case}" COMMAND umicom-c-test-conditional "${case}")
     set_tests_properties("umicom.c.conditional.${case}" PROPERTIES TIMEOUT 15 LABELS "umicom-c;conditional;compiler")
+endforeach()
+
+# Counted loops retain ordinary forward bytecode and one lexical body.
+add_executable(umicom-c-test-counted-for test_counted_for.c)
+target_link_libraries(umicom-c-test-counted-for PRIVATE UmicomC::Compiler)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(umicom-c-test-counted-for PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+endif()
+foreach(case values refusals wire bounds warnings host-input)
+    add_test(NAME "umicom.c.counted-for.${case}" COMMAND umicom-c-test-counted-for "${case}")
+    set_tests_properties("umicom.c.counted-for.${case}" PROPERTIES TIMEOUT 20 LABELS "umicom-c;compiler;control-flow")
 endforeach()
 
 if(TARGET umicom-c)

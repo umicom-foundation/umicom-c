@@ -52,5 +52,8 @@ typedef struct UmcLexer {
 } UmcLexer;
 
 UmcStatus umc_fail(UmcDiagnostic *diagnostic, UmcStatus status, size_t offset);
+/* The compiler and bounded source translator share the same comment extent. */
+bool umc_lex_at_comment(const UmcLexer *lexer);
+UmcStatus umc_lex_skip_comment(UmcLexer *lexer, UmcDiagnostic *diagnostic);
 UmcStatus umc_lex_next(UmcLexer *lexer, UmcToken *token, UmcDiagnostic *diagnostic);
 #endif
